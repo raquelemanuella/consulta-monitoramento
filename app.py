@@ -8,7 +8,7 @@ import plotly.express as px
 
 from dicionario_tiers import DICIONARIO_VEICULOS
 
-st.set_page_config(page_title="Consulta de Monitoramento - Agência LK", page_icon="logo.png", layout="wide")
+st.set_page_config(page_title="Consulta de Monitoramento - Agência LK", page_icon="logo_lk.png", layout="wide")
 
 # ============================================================
 # ESTILO (tema claro, colorido e elegante)
@@ -182,7 +182,7 @@ def check_password():
     c_img1, c_img2, c_img3 = st.columns([3, 1, 3])
     with c_img2:
         try:
-            st.image("logo.png", width="stretch")
+            st.image("logo_lk.png", width="stretch")
         except Exception:
             pass
 
@@ -364,14 +364,14 @@ with st.sidebar:
         st.session_state["authenticated"] = False
         st.rerun()
 
-col_logo, col_titulo = st.columns([1, 6])
+col_titulo, col_logo = st.columns([6, 1])
+with col_titulo:
+    st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
 with col_logo:
     try:
         st.image("logo_lk.png", width=90)
     except Exception:
         pass
-with col_titulo:
-    st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -399,14 +399,12 @@ if not df_view.empty:
 
     st.write("<span class='terminal-label' style='margin-top: 15px;'>Query Filters</span>", unsafe_allow_html=True)
 
-    c_filt1, c_filt2 = st.columns([1, 1.5])
-    with c_filt2:
-        ano_vigente = datetime.now().year
-        padrao_inicio = datetime(ano_vigente, 1, 1).date()
-        padrao_fim = datetime(ano_vigente, 12, 31).date()
-        c_de, c_ate = st.columns(2)
-        with c_de: data_inicio = st.date_input("Data Inicial:", value=padrao_inicio, format="DD/MM/YYYY", key=f"di_{cli_sel}")
-        with c_ate: data_fim = st.date_input("Data Final:", value=padrao_fim, format="DD/MM/YYYY", key=f"df_{cli_sel}")
+    c_de, c_ate = st.columns(2)
+    ano_vigente = datetime.now().year
+    padrao_inicio = datetime(ano_vigente, 1, 1).date()
+    padrao_fim = datetime(ano_vigente, 12, 31).date()
+    with c_de: data_inicio = st.date_input("Data Inicial:", value=padrao_inicio, format="DD/MM/YYYY", key=f"di_{cli_sel}")
+    with c_ate: data_fim = st.date_input("Data Final:", value=padrao_fim, format="DD/MM/YYYY", key=f"df_{cli_sel}")
 
     if data_inicio and data_fim:
         mask_data = (df_view['data_publicacao'].dt.date >= data_inicio) & (df_view['data_publicacao'].dt.date <= data_fim)
@@ -414,16 +412,7 @@ if not df_view.empty:
     else:
         df_view_filtrado_data = df_view
 
-    with c_filt1:
-        temas_disponiveis = sorted([t for t in df_view_filtrado_data['release_tema'].unique() if pd.notna(t) and t != ""])
-        filtro_tema = st.multiselect("Filtrar Tema:", temas_disponiveis)
-
-    if filtro_tema:
-        df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['release_tema'].isin(filtro_tema)]
-
-    c_veic, c_est, c_mid = st.columns([2, 1, 1])
-    with c_veic:
-        filtro_veiculo = st.text_input("Filtrar Veículo:", placeholder="Ex: Folha, G1, @...")
+    c_est, c_mid = st.columns(2)
     with c_est:
         estados_disp = sorted([e for e in df_view_filtrado_data['estado'].unique() if pd.notna(e) and e != ""])
         filtro_estado = st.multiselect("Filtrar Estado:", estados_disp)
@@ -431,8 +420,8 @@ if not df_view.empty:
         midias_disp = sorted([m for m in df_view_filtrado_data['canal'].unique() if pd.notna(m) and m != ""])
         filtro_midia = st.multiselect("Tipo de Mídia:", midias_disp)
 
-    if filtro_veiculo:
-        df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['veiculo_nome'].astype(str).str.contains(filtro_veiculo, case=False, na=False)]
+    if filtro_estado:
+        df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['estado'].isin(filtro_estado)]
     if filtro_estado:
         df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['estado'].isin(filtro_estado)]
     if filtro_midia:
@@ -443,9 +432,6 @@ if not df_view.empty:
         df_view_final = df_view_filtrado_data[df_view_filtrado_data['link'].astype(str).str.contains(url_busca, case=False, na=False)]
     else:
         df_view_final = df_view_filtrado_data
-
-    if filtro_tema:
-        st.markdown(f"<p style='color: #8B87A8; font-family: \"Inter\", sans-serif; font-size: 12px; margin-top: 5px;'>↳ Você está vendo o preview do tema: <span style='color: #6C5CE7; font-weight: 700;'>{', '.join(filtro_tema)}</span></p>", unsafe_allow_html=True)
 
     # ============================================================
     # RESUMO (cartões)
