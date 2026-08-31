@@ -353,9 +353,13 @@ CLIENTES = [
 # CABEÇALHO E LOGOUT
 # ============================================================
 with st.sidebar:
-    if st.button("Sair", width="stretch"):
-        st.session_state["authenticated"] = False
-        st.rerun()
+    col1, col2, col3 = st.sidebar.columns([1, 2, 1])
+    with col2:
+        try:
+            st.image("logo_lk.png", width="stretch")
+        except:
+            pass
+    st.markdown("---")
     if st.button("Sair", width="stretch"):
         st.session_state["authenticated"] = False
         st.rerun()
