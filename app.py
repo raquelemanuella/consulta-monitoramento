@@ -14,7 +14,7 @@ SUPABASE_ANON_KEY = st.secrets["SUPABASE_ANON_KEY"]
 APP_PASSWORD = st.secrets["APP_PASSWORD"]  # senha única da equipe, definida por vocês
 
 # 👇 TROQUE aqui pelo nome real da sua tabela no Supabase
-TABLE_NAME = "monitoramento"
+TABLE_NAME = "clippings"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
