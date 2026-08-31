@@ -11,18 +11,21 @@ from dicionario_tiers import DICIONARIO_VEICULOS
 st.set_page_config(page_title="Consulta de Monitoramento - Agência LK", page_icon="logo.png", layout="wide")
 
 # ============================================================
-# ESTILO (tema escuro, igual ao painel original)
+# ESTILO (tema claro, colorido e elegante)
 # ============================================================
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
 
     header[data-testid="stHeader"] { background-color: transparent !important; }
     footer[data-testid="stFooter"] { display: none !important; }
 
-    [data-testid="stImage"] img {
-        filter: invert(0.7);
-        opacity: 0.7;
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif !important;
+    }
+
+    .stApp {
+        background-color: #FAFAFF !important;
     }
 
     .block-container {
@@ -32,28 +35,28 @@ st.markdown("""
     }
 
     h1, h2, h3, h4, h5, h6 {
-        font-family: 'JetBrains Mono', monospace !important;
-        color: #f5f5f5 !important;
-        font-weight: 700 !important;
-        letter-spacing: -0.02em !important;
+        font-family: 'Poppins', sans-serif !important;
+        color: #2D2A4A !important;
+        font-weight: 600 !important;
+        letter-spacing: -0.01em !important;
     }
 
     .terminal-label {
-        color: #4ade80;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 10px;
+        color: #6C5CE7;
+        font-family: 'Poppins', sans-serif;
+        font-size: 11px;
         text-transform: uppercase;
-        letter-spacing: 0.2em;
+        letter-spacing: 0.15em;
         font-weight: 700;
         display: block;
-        margin-bottom: 5px;
+        margin-bottom: 6px;
     }
 
     div[data-testid="stVerticalBlockBorderWrapper"] > div {
-        background-color: #111111 !important;
-        border: 1px solid #262626 !important;
-        border-radius: 8px !important;
-        box-shadow: none !important;
+        background-color: #FFFFFF !important;
+        border: 1px solid #ECEBFA !important;
+        border-radius: 14px !important;
+        box-shadow: 0 4px 16px rgba(108, 92, 231, 0.06) !important;
         padding: 1.5rem !important;
     }
 
@@ -67,22 +70,22 @@ st.markdown("""
     }
 
     [data-testid="stMetricLabel"] {
-        font-family: 'JetBrains Mono', monospace !important;
+        font-family: 'Poppins', sans-serif !important;
         text-transform: uppercase !important;
-        letter-spacing: 0.1em !important;
+        letter-spacing: 0.08em !important;
         font-size: 11px !important;
-        font-weight: 500 !important;
-        color: #737373 !important;
+        font-weight: 600 !important;
+        color: #8B87A8 !important;
         text-align: center !important;
         justify-content: center !important;
         margin-bottom: 8px !important;
     }
 
     [data-testid="stMetricValue"] {
-        font-family: 'JetBrains Mono', monospace !important;
+        font-family: 'Poppins', sans-serif !important;
         font-size: clamp(16px, 2.5vw, 28px) !important;
         font-weight: 700 !important;
-        color: #f5f5f5 !important;
+        color: #6C5CE7 !important;
         text-align: center !important;
         justify-content: center !important;
         word-break: break-word !important;
@@ -90,66 +93,73 @@ st.markdown("""
     }
 
     .stTextInput div[data-baseweb="input"], .stSelectbox div[data-baseweb="select"] {
-        background-color: #111111 !important;
-        border: 1px solid #262626 !important;
-        border-radius: 6px !important;
-        transition: all 0.3s ease;
+        background-color: #FFFFFF !important;
+        border: 1.5px solid #E4E2F7 !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease;
     }
 
     .stTextInput input {
-        color: #e5e5e5 !important;
-        font-family: 'JetBrains Mono', monospace !important;
+        color: #2D2A4A !important;
+        font-family: 'Inter', sans-serif !important;
         font-size: 14px !important;
         background-color: transparent !important;
     }
 
     .stTextInput div[data-baseweb="input"]:focus-within, .stSelectbox div[data-baseweb="select"]:focus-within {
-        border-color: #4ade80 !important;
-        box-shadow: 0 0 0 1px #4ade80 !important;
+        border-color: #6C5CE7 !important;
+        box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.15) !important;
     }
 
     label[data-testid="stWidgetLabel"] p {
-        font-family: 'JetBrains Mono', monospace !important;
+        font-family: 'Poppins', sans-serif !important;
         text-transform: uppercase !important;
-        letter-spacing: 0.1em !important;
+        letter-spacing: 0.08em !important;
         font-size: 11px !important;
-        color: #737373 !important;
+        font-weight: 600 !important;
+        color: #8B87A8 !important;
     }
 
     .stButton > button {
-        font-family: 'JetBrains Mono', monospace !important;
-        background-color: #111111 !important;
-        color: #737373 !important;
-        border: 1px solid #262626 !important;
-        border-radius: 6px !important;
-        transition: all 0.3s ease !important;
+        font-family: 'Poppins', sans-serif !important;
+        background-color: #FFFFFF !important;
+        color: #6C5CE7 !important;
+        border: 1.5px solid #E4E2F7 !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease !important;
         font-size: 14px !important;
+        font-weight: 600 !important;
     }
     .stButton > button:hover {
-        background-color: #f5f5f5 !important;
-        color: #0a0a0a !important;
-        border-color: #f5f5f5 !important;
+        background-color: #F4F3FF !important;
+        color: #6C5CE7 !important;
+        border-color: #6C5CE7 !important;
     }
     .stButton > button[kind="primary"] {
-        background-color: #4ade80 !important;
-        color: #0a0a0a !important;
+        background: linear-gradient(135deg, #6C5CE7 0%, #A29BFE 100%) !important;
+        color: #FFFFFF !important;
         border: none !important;
         font-weight: 700 !important;
     }
     .stButton > button[kind="primary"]:hover {
-        background-color: #22c55e !important;
-        color: #0a0a0a !important;
+        background: linear-gradient(135deg, #5b4bd6 0%, #8f87f0 100%) !important;
+        color: #FFFFFF !important;
     }
 
-    hr { border-color: #262626 !important; }
+    div[data-testid="stAlert"] {
+        border-radius: 10px !important;
+        font-family: 'Inter', sans-serif !important;
+    }
+
+    hr { border-color: #ECEBFA !important; }
 
     .custom-footer {
         text-align: center;
         margin-top: 60px;
         padding-bottom: 20px;
-        color: #525252;
-        font-size: 10px;
-        font-family: 'JetBrains Mono', monospace;
+        color: #B5B2CC;
+        font-size: 11px;
+        font-family: 'Inter', sans-serif;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -354,7 +364,15 @@ with st.sidebar:
         st.session_state["authenticated"] = False
         st.rerun()
 
-st.markdown("<h2 style='text-align: center;'>Consulta de Monitoramento</h2>", unsafe_allow_html=True)
+col_logo, col_titulo = st.columns([1, 6])
+with col_logo:
+    try:
+        st.image("logo_lk.png", width=90)
+    except Exception:
+        pass
+with col_titulo:
+    st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
+
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ============================================================
@@ -427,7 +445,7 @@ if not df_view.empty:
         df_view_final = df_view_filtrado_data
 
     if filtro_tema:
-        st.markdown(f"<p style='color: #737373; font-family: \"JetBrains Mono\", monospace; font-size: 12px; margin-top: 5px;'>↳ Você está vendo o preview do tema: <span style='color: #4ade80; font-weight: 700;'>{', '.join(filtro_tema)}</span></p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color: #8B87A8; font-family: \"Inter\", sans-serif; font-size: 12px; margin-top: 5px;'>↳ Você está vendo o preview do tema: <span style='color: #6C5CE7; font-weight: 700;'>{', '.join(filtro_tema)}</span></p>", unsafe_allow_html=True)
 
     # ============================================================
     # RESUMO (cartões)
@@ -458,6 +476,22 @@ if not df_view.empty:
             for c_nome, c_qtd in canais_ordenados.items():
                 cols[i % 3].metric(c_nome, c_qtd)
                 i += 1
+
+        st.markdown("---")
+        if cli_sel == "Ambev":
+            st.markdown("<span class='terminal-label'>Classificação</span>", unsafe_allow_html=True)
+            qtd_idm = len(df_view_final[df_view_final['check_idm'].astype(str).str.strip() == "IDM"])
+            qtd_sem_idm = total_materias - qtd_idm
+            c_idm1, c_idm2 = st.columns(2)
+            c_idm1.metric("IDM", qtd_idm)
+            c_idm2.metric("Sem IDM", qtd_sem_idm)
+        elif "tier" in df_view_final.columns:
+            st.markdown("<span class='terminal-label'>Classificação</span>", unsafe_allow_html=True)
+            qtd_tier1 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 1"])
+            qtd_tier2 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 2"])
+            c_t1, c_t2 = st.columns(2)
+            c_t1.metric("Tier 1", qtd_tier1)
+            c_t2.metric("Tier 2", qtd_tier2)
 
     # ============================================================
     # GRÁFICOS
