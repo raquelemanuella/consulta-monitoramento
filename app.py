@@ -159,7 +159,7 @@ st.markdown("""
 # ============================================================
 def check_password():
     try:
-        SENHA_CORRETA = st.secrets["SUPABASE_ANON_KEY"]
+        SENHA_CORRETA = st.secrets["APP_PASSWORD"]
     except KeyError:
         st.error("⚠️ Erro de configuração: Senha não encontrada nos secrets.")
         st.stop()
