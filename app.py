@@ -356,24 +356,17 @@ with st.sidebar:
     col1, col2, col3 = st.sidebar.columns([1, 2, 1])
     with col2:
         try:
-            st.image("logo_lk.png", width="stretch")
+            # Dica: O Streamlit atual prefere use_container_width=True em vez de width="stretch"
+            st.image("logo_lk.png", use_container_width=True) 
         except:
             pass
     st.markdown("---")
-    if st.button("Sair", width="stretch"):
+    if st.button("Sair", use_container_width=True):
         st.session_state["authenticated"] = False
         st.rerun()
 
-col_titulo, col_logo = st.columns([6, 1])
-with col_titulo:
-    st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
-with col_logo:
-    try:
-        st.image("logo_lk.png", width=90)
-    except Exception:
-        pass
-
-st.markdown("<br>", unsafe_allow_html=True)
+# Área principal: apenas o título, sem a coluna da logo
+st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
 
 # ============================================================
 # FILTROS
