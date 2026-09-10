@@ -373,7 +373,7 @@ CLIENTES = [
 ]
 
 # ============================================================
-# BARRA LATERAL (logo + logout)
+# BARRA LATERAL: LOGO + PAINEL DE FILTROS COMPLETO
 # ============================================================
 with st.sidebar:
     col1, col2, col3 = st.sidebar.columns([1, 2, 1])
@@ -382,21 +382,11 @@ with st.sidebar:
             st.image("logo_lk.png", use_container_width=True)
         except:
             pass
-    st.markdown("---")
-    if st.button("Sair", use_container_width=True):
-        st.session_state["authenticated"] = False
-        st.rerun()
 
-# ============================================================
-# CABEÇALHO: TÍTULO + SELETOR DE CLIENTE + ATUALIZAR AGORA
-# ============================================================
-col_titulo_h, col_cliente_h, col_refresh_h = st.columns([3, 2, 1])
-with col_titulo_h:
-    st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
-with col_cliente_h:
+    st.markdown("---")
+
     cli_sel = st.selectbox("Cliente:", ["Todos os Clientes"] + CLIENTES)
-with col_refresh_h:
-    st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+
     if st.button("🔄 Atualizar agora", use_container_width=True):
         carregar_dados_banco.clear()
         st.rerun()
@@ -417,21 +407,17 @@ if not df_view.empty:
 
     df_view['estado'] = df_view.apply(lambda r: inferir_estado(cli_sel, r['veiculo_nome'], r['localizacao']), axis=1)
 
-    # Aviso de última atualização
-    ultima_att = df_view['data_upload'].max()
-    if pd.notna(ultima_att):
-        st.info(f"📅 Última atualização da base para **{cli_sel}**: {ultima_att.strftime('%d/%m/%Y')}")
+    # ============================================================
+    # RESTANTE DOS FILTROS, TAMBÉM NA BARRA LATERAL
+    # ============================================================
+    with st.sidebar:
+        st.markdown("<span class='terminal-label'>Filtros</span>", unsafe_allow_html=True)
 
-    # ============================================================
-    # FILTROS (dentro de um expander recolhível)
-    # ============================================================
-    with st.expander("🔍 Filtros", expanded=False):
-        c_de, c_ate = st.columns(2)
         ano_vigente = datetime.now().year
         padrao_inicio = datetime(ano_vigente, 1, 1).date()
         padrao_fim = datetime(ano_vigente, 12, 31).date()
-        with c_de: data_inicio = st.date_input("Data Inicial:", value=padrao_inicio, format="DD/MM/YYYY", key=f"di_{cli_sel}")
-        with c_ate: data_fim = st.date_input("Data Final:", value=padrao_fim, format="DD/MM/YYYY", key=f"df_{cli_sel}")
+        data_inicio = st.date_input("Data Inicial:", value=padrao_inicio, format="DD/MM/YYYY", key=f"di_{cli_sel}")
+        data_fim = st.date_input("Data Final:", value=padrao_fim, format="DD/MM/YYYY", key=f"df_{cli_sel}")
 
         if data_inicio and data_fim:
             mask_data = (df_view['data_publicacao'].dt.date >= data_inicio) & (df_view['data_publicacao'].dt.date <= data_fim)
@@ -439,32 +425,41 @@ if not df_view.empty:
         else:
             df_view_filtrado_data = df_view
 
-        c_est, c_mid = st.columns(2)
-        with c_est:
-            estados_disp = sorted([e for e in df_view_filtrado_data['estado'].unique() if pd.notna(e) and e != ""])
-            filtro_estado = st.multiselect("Filtrar Estado:", estados_disp)
-        with c_mid:
-            midias_disp = sorted([m for m in df_view_filtrado_data['canal'].unique() if pd.notna(m) and m != ""])
-            filtro_midia = st.multiselect("Tipo de Mídia:", midias_disp)
+        estados_disp = sorted([e for e in df_view_filtrado_data['estado'].unique() if pd.notna(e) and e != ""])
+        filtro_estado = st.multiselect("Filtrar Estado:", estados_disp)
+
+        midias_disp = sorted([m for m in df_view_filtrado_data['canal'].unique() if pd.notna(m) and m != ""])
+        filtro_midia = st.multiselect("Tipo de Mídia:", midias_disp)
 
         if filtro_estado:
             df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['estado'].isin(filtro_estado)]
         if filtro_midia:
             df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['canal'].isin(filtro_midia)]
 
-        busca_titulo = st.text_input("Buscar palavra no título:", placeholder="Ex: Skol, campanha, patrocínio...")
+        busca_titulo = st.text_input("Buscar palavra no título:", placeholder="Ex: Skol, campanha...")
         if busca_titulo:
             df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['titulo'].astype(str).str.contains(busca_titulo, case=False, na=False)]
 
-        url_busca = st.text_input("Checagem de Duplicidade (URL):", placeholder="Cole o link exato aqui...")
+        url_busca = st.text_input("Checagem de Duplicidade (URL):", placeholder="Cole o link exato...")
         if url_busca:
             df_view_final = df_view_filtrado_data[df_view_filtrado_data['link'].astype(str).str.contains(url_busca, case=False, na=False)]
         else:
             df_view_final = df_view_filtrado_data
 
+        st.markdown("---")
+        if st.button("Sair", use_container_width=True):
+            st.session_state["authenticated"] = False
+            st.rerun()
+
     # ============================================================
-    # ABAS: RESUMO x TABELA COMPLETA
+    # ÁREA PRINCIPAL: TÍTULO + AVISO + ABAS DE RESULTADOS
     # ============================================================
+    st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
+
+    ultima_att = df_view['data_upload'].max()
+    if pd.notna(ultima_att):
+        st.info(f"📅 Última atualização da base para **{cli_sel}**: {ultima_att.strftime('%d/%m/%Y')}")
+
     total_materias = len(df_view_final)
     aud_total = safe_float(df_view_final['audiencia'].apply(limpar_valor_numerico).sum())
     val_total = safe_float(df_view_final.apply(lambda r: extrair_valoracao_real(r['valoracao'], r['sentimento']), axis=1).sum())
@@ -593,6 +588,12 @@ if not df_view.empty:
             }
         )
 else:
+    with st.sidebar:
+        st.markdown("---")
+        if st.button("Sair", use_container_width=True, key="sair_vazio"):
+            st.session_state["authenticated"] = False
+            st.rerun()
+    st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
     st.info("Nenhum registro encontrado no banco de dados.")
 
 st.markdown("""
