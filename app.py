@@ -182,7 +182,7 @@ def check_password():
     c_img1, c_img2, c_img3 = st.columns([3, 1, 3])
     with c_img2:
         try:
-            st.image("logo_lk.png", width="stretch")
+            st.image("logo_lk.png", use_container_width=True)
         except Exception:
             pass
 
@@ -194,7 +194,7 @@ def check_password():
             senha = st.text_input("Senha:", type="password")
             c_btn1, c_btn2, c_btn3 = st.columns([1, 1, 1])
             with c_btn2:
-                submit = st.form_submit_button("ENTRAR", type="primary", width="stretch")
+                submit = st.form_submit_button("ENTRAR", type="primary", use_container_width=True)
             if submit:
                 if senha == SENHA_CORRETA:
                     st.session_state["authenticated"] = True
@@ -207,7 +207,7 @@ if not check_password():
     st.stop()
 
 # ============================================================
-# FUNÇÕES AUXILIARES (mesma lógica do sistema original)
+# FUNÇÕES AUXILIARES
 # ============================================================
 def safe_float(val):
     try:
@@ -263,9 +263,12 @@ def inferir_estado(cliente, veiculo, localizacao):
         veiculo_limpo = str(veiculo).lower().strip()
         if cliente != "Ambev":
             dic = DICIONARIO_VEICULOS.get(cliente, {})
-            for v, dados in dic.items():
-                if v.lower().strip() in veiculo_limpo or veiculo_limpo in v.lower().strip():
-                    return dados.get("Estado", "Nacional")
+            # Correção do erro: só percorre como dicionário se realmente for um dicionário.
+            # Alguns clientes no dicionario_tiers.py estão salvos como lista, o que quebrava aqui.
+            if isinstance(dic, dict):
+                for v, dados in dic.items():
+                    if v.lower().strip() in veiculo_limpo or veiculo_limpo in v.lower().strip():
+                        return dados.get("Estado", "Nacional")
 
     if pd.notna(localizacao) and str(localizacao).strip() != "":
         loc = str(localizacao).lower().strip()
@@ -356,8 +359,7 @@ with st.sidebar:
     col1, col2, col3 = st.sidebar.columns([1, 2, 1])
     with col2:
         try:
-            # Dica: O Streamlit atual prefere use_container_width=True em vez de width="stretch"
-            st.image("logo_lk.png", use_container_width=True) 
+            st.image("logo_lk.png", use_container_width=True)
         except:
             pass
     st.markdown("---")
@@ -365,7 +367,6 @@ with st.sidebar:
         st.session_state["authenticated"] = False
         st.rerun()
 
-# Área principal: apenas o título, sem a coluna da logo
 st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
 
 # ============================================================
@@ -415,8 +416,6 @@ if not df_view.empty:
 
     if filtro_estado:
         df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['estado'].isin(filtro_estado)]
-    if filtro_estado:
-        df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['estado'].isin(filtro_estado)]
     if filtro_midia:
         df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['canal'].isin(filtro_midia)]
 
@@ -427,73 +426,77 @@ if not df_view.empty:
         df_view_final = df_view_filtrado_data
 
     # ============================================================
-    # RESUMO (cartões)
+    # RESUMO: CARTÕES DE UM LADO, GRÁFICOS DO OUTRO
     # ============================================================
     st.markdown("<span class='terminal-label'>Overview</span><h4>Resumo</h4>", unsafe_allow_html=True)
-    with st.container(border=True):
-        total_materias = len(df_view_final)
-        aud_total = safe_float(df_view_final['audiencia'].apply(limpar_valor_numerico).sum())
-        val_total = safe_float(df_view_final.apply(lambda r: extrair_valoracao_real(r['valoracao'], r['sentimento']), axis=1).sum())
 
-        st.metric("Total de Matérias", total_materias)
-        k1, k2 = st.columns(2)
-        k1.metric("Audiência Est.", formatar_audiencia(aud_total))
-        k2.metric("Valor Editorial", formatar_moeda(val_total))
-        st.markdown("---")
+    total_materias = len(df_view_final)
+    aud_total = safe_float(df_view_final['audiencia'].apply(limpar_valor_numerico).sum())
+    val_total = safe_float(df_view_final.apply(lambda r: extrair_valoracao_real(r['valoracao'], r['sentimento']), axis=1).sum())
 
-        st.markdown("<span class='terminal-label'>Distribution</span>", unsafe_allow_html=True)
-        contagem = df_view_final['canal'].value_counts().to_dict()
-        canais_presentes = {}
-        for nome_canal, qtd in contagem.items():
-            if qtd > 0:
-                n = padronizar_canal(nome_canal)
-                canais_presentes[n] = canais_presentes.get(n, 0) + qtd
-        canais_ordenados = dict(sorted(canais_presentes.items(), key=lambda item: item[1], reverse=True))
-        if canais_ordenados:
-            cols = st.columns(3)
-            i = 0
-            for c_nome, c_qtd in canais_ordenados.items():
-                cols[i % 3].metric(c_nome, c_qtd)
-                i += 1
+    col_cards, col_graficos = st.columns([1, 1.2])
 
-        st.markdown("---")
-        if cli_sel == "Ambev":
+    with col_cards:
+        with st.container(border=True):
+            st.metric("Total de Matérias", total_materias)
+            k1, k2 = st.columns(2)
+            k1.metric("Audiência Est.", formatar_audiencia(aud_total))
+            k2.metric("Valor Editorial", formatar_moeda(val_total))
+            st.markdown("---")
+
+            st.markdown("<span class='terminal-label'>Distribution</span>", unsafe_allow_html=True)
+            contagem = df_view_final['canal'].value_counts().to_dict()
+            canais_presentes = {}
+            for nome_canal, qtd in contagem.items():
+                if qtd > 0:
+                    n = padronizar_canal(nome_canal)
+                    canais_presentes[n] = canais_presentes.get(n, 0) + qtd
+            canais_ordenados = dict(sorted(canais_presentes.items(), key=lambda item: item[1], reverse=True))
+            itens = list(canais_ordenados.items())
+            n_por_linha = 2
+            for i in range(0, len(itens), n_por_linha):
+                linha = itens[i:i + n_por_linha]
+                linha_cols = st.columns(n_por_linha)
+                for idx, (c_nome, c_qtd) in enumerate(linha):
+                    linha_cols[idx].metric(c_nome, c_qtd)
+
+            st.markdown("---")
             st.markdown("<span class='terminal-label'>Classificação</span>", unsafe_allow_html=True)
-            qtd_idm = len(df_view_final[df_view_final['check_idm'].astype(str).str.strip() == "IDM"])
-            qtd_sem_idm = total_materias - qtd_idm
-            c_idm1, c_idm2 = st.columns(2)
-            c_idm1.metric("IDM", qtd_idm)
-            c_idm2.metric("Sem IDM", qtd_sem_idm)
-        elif "tier" in df_view_final.columns:
-            st.markdown("<span class='terminal-label'>Classificação</span>", unsafe_allow_html=True)
-            qtd_tier1 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 1"])
-            qtd_tier2 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 2"])
-            c_t1, c_t2 = st.columns(2)
-            c_t1.metric("Tier 1", qtd_tier1)
-            c_t2.metric("Tier 2", qtd_tier2)
+            if cli_sel == "Ambev":
+                qtd_idm = len(df_view_final[df_view_final['check_idm'].astype(str).str.strip() == "IDM"])
+                qtd_sem_idm = total_materias - qtd_idm
+                c_idm1, c_idm2 = st.columns(2)
+                c_idm1.metric("IDM", qtd_idm)
+                c_idm2.metric("Sem IDM", qtd_sem_idm)
+            elif "tier" in df_view_final.columns:
+                qtd_tier1 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 1"])
+                qtd_tier2 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 2"])
+                c_t1, c_t2 = st.columns(2)
+                c_t1.metric("Tier 1", qtd_tier1)
+                c_t2.metric("Tier 2", qtd_tier2)
 
-    # ============================================================
-    # GRÁFICOS
-    # ============================================================
-    if total_materias > 0:
-        g1, g2 = st.columns(2)
-        with g1:
-            st.markdown("<span class='terminal-label'>Breakdown</span><h4>Tipo de Mídia</h4>", unsafe_allow_html=True)
-            df_canal_padrao = df_view_final['canal'].apply(padronizar_canal)
-            df_pizza = df_canal_padrao.value_counts().reset_index()
-            df_pizza.columns = ['Canal', 'Quantidade']
-            fig_pizza = px.pie(df_pizza, names='Canal', values='Quantidade')
-            fig_pizza.update_traces(textposition='inside', textinfo='percent', hoverinfo='label+percent')
-            fig_pizza.update_layout(margin=dict(t=10, b=10, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig_pizza, width="stretch")
-        with g2:
-            st.markdown("<span class='terminal-label'>Geomapping</span><h4>Publicações por Estado</h4>", unsafe_allow_html=True)
-            df_barras = df_view_final['estado'].value_counts().reset_index()
-            df_barras.columns = ['Estado', 'Quantidade']
-            fig_barras = px.bar(df_barras, x='Estado', y='Quantidade', text_auto=True)
-            fig_barras.update_traces(marker_color='#4ade80')
-            fig_barras.update_layout(xaxis_title="", yaxis_title="Publicações", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", margin=dict(t=10, b=10, l=0, r=0))
-            st.plotly_chart(fig_barras, width="stretch")
+    with col_graficos:
+        if total_materias > 0:
+            with st.container(border=True):
+                st.markdown("<span class='terminal-label'>Breakdown</span><h4>Tipo de Mídia</h4>", unsafe_allow_html=True)
+                df_canal_padrao = df_view_final['canal'].apply(padronizar_canal)
+                df_pizza = df_canal_padrao.value_counts().reset_index()
+                df_pizza.columns = ['Canal', 'Quantidade']
+                fig_pizza = px.pie(df_pizza, names='Canal', values='Quantidade')
+                fig_pizza.update_traces(textposition='inside', textinfo='percent', hoverinfo='label+percent')
+                fig_pizza.update_layout(margin=dict(t=10, b=10, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", height=280)
+                st.plotly_chart(fig_pizza, use_container_width=True)
+
+            with st.container(border=True):
+                st.markdown("<span class='terminal-label'>Geomapping</span><h4>Publicações por Estado</h4>", unsafe_allow_html=True)
+                df_barras = df_view_final['estado'].value_counts().reset_index()
+                df_barras.columns = ['Estado', 'Quantidade']
+                fig_barras = px.bar(df_barras, x='Estado', y='Quantidade', text_auto=True)
+                fig_barras.update_traces(marker_color='#6C5CE7')
+                fig_barras.update_layout(xaxis_title="", yaxis_title="Publicações", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", margin=dict(t=10, b=10, l=0, r=0), height=280)
+                st.plotly_chart(fig_barras, use_container_width=True)
+        else:
+            st.info("Sem dados suficientes para gerar gráficos.")
 
     st.markdown("---")
 
@@ -538,11 +541,11 @@ if not df_view.empty:
         nome_arq = f"Consulta de Monitoramento — {cli_sel} {data_inicio.strftime('%d-%m')} a {data_fim.strftime('%d-%m')} | LK.xlsx"
         st.download_button(label="EXPORTAR EXCEL", data=excel_data, file_name=nome_arq,
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           width="stretch")
+                           use_container_width=True)
 
     st.dataframe(
         df_final_preview,
-        width="stretch",
+        use_container_width=True,
         height=500,
         hide_index=True,
         column_config={
