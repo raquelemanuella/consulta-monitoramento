@@ -339,11 +339,21 @@ supabase = get_client()
 
 @st.cache_data(ttl=600)
 def carregar_dados_banco(cliente):
-    query = supabase.table("clippings").select("*")
-    if cliente != "Todos os Clientes":
-        query = query.eq("cliente", cliente)
-    resultado = query.order("data_publicacao", desc=True).execute()
-    return pd.DataFrame(resultado.data)
+    todos_dados = []
+    tamanho_pagina = 1000
+    inicio = 0
+    while True:
+        query = supabase.table("clippings").select("*")
+        if cliente != "Todos os Clientes":
+            query = query.eq("cliente", cliente)
+        query = query.order("data_publicacao", desc=True).range(inicio, inicio + tamanho_pagina - 1)
+        resultado = query.execute()
+        dados = resultado.data
+        todos_dados.extend(dados)
+        if len(dados) < tamanho_pagina:
+            break
+        inicio += tamanho_pagina
+    return pd.DataFrame(todos_dados)
 
 CLIENTES = [
     "2GB Entretenimento", "99 City Launches", "99 Food", "99 Metrô", "Ambev", "ACEC", "Camarote LEM", "CCBB Salvador", "Clínica Sim",
@@ -374,24 +384,16 @@ st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência L
 # ============================================================
 cli_sel = st.selectbox("Cliente:", ["Todos os Clientes"] + CLIENTES)
 
-@st.cache_data(ttl=600)
-def carregar_dados_banco(cliente):
-    todos_dados = []
-    tamanho_pagina = 1000
-    inicio = 0
-    while True:
-        query = supabase.table("clippings").select("*")
-        if cliente != "Todos os Clientes":
-            query = query.eq("cliente", cliente)
-        query = query.order("data_publicacao", desc=True).range(inicio, inicio + tamanho_pagina - 1)
-        resultado = query.execute()
-        dados = resultado.data
-        todos_dados.extend(dados)
-        if len(dados) < tamanho_pagina:
-            break
-        inicio += tamanho_pagina
-    return pd.DataFrame(todos_dados)
-    
+df_view = carregar_dados_banco(cli_sel).copy()
+
+if not df_view.empty:
+    df_view['data_upload'] = pd.to_datetime(df_view.get('data_upload', pd.Series()), errors='coerce')
+    if 'data_publicacao' in df_view.columns:
+        df_view['data_publicacao'] = pd.to_datetime(df_view['data_publicacao'], errors='coerce')
+        df_view['data_publicacao'] = df_view['data_publicacao'].fillna(df_view['data_upload']).fillna(pd.Timestamp.now())
+    else:
+        df_view['data_publicacao'] = df_view['data_upload'].fillna(pd.Timestamp.now())
+
     df_view['estado'] = df_view.apply(lambda r: inferir_estado(cli_sel, r['veiculo_nome'], r['localizacao']), axis=1)
 
     # Aviso de última atualização
