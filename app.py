@@ -151,6 +151,18 @@ st.markdown("""
         font-family: 'Inter', sans-serif !important;
     }
 
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        font-family: 'Poppins', sans-serif !important;
+        font-weight: 600 !important;
+        color: #8B87A8 !important;
+    }
+    .stTabs [aria-selected="true"] {
+        color: #6C5CE7 !important;
+    }
+
     hr { border-color: #ECEBFA !important; }
 
     .custom-footer {
@@ -263,8 +275,6 @@ def inferir_estado(cliente, veiculo, localizacao):
         veiculo_limpo = str(veiculo).lower().strip()
         if cliente != "Ambev":
             dic = DICIONARIO_VEICULOS.get(cliente, {})
-            # Correção do erro: só percorre como dicionário se realmente for um dicionário.
-            # Alguns clientes no dicionario_tiers.py estão salvos como lista, o que quebrava aqui.
             if isinstance(dic, dict):
                 for v, dados in dic.items():
                     if v.lower().strip() in veiculo_limpo or veiculo_limpo in v.lower().strip():
@@ -363,7 +373,7 @@ CLIENTES = [
 ]
 
 # ============================================================
-# CABEÇALHO E LOGOUT
+# BARRA LATERAL (logo + logout)
 # ============================================================
 with st.sidebar:
     col1, col2, col3 = st.sidebar.columns([1, 2, 1])
@@ -377,14 +387,25 @@ with st.sidebar:
         st.session_state["authenticated"] = False
         st.rerun()
 
-st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
+# ============================================================
+# CABEÇALHO: TÍTULO + SELETOR DE CLIENTE + ATUALIZAR AGORA
+# ============================================================
+col_titulo_h, col_cliente_h, col_refresh_h = st.columns([3, 2, 1])
+with col_titulo_h:
+    st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
+with col_cliente_h:
+    cli_sel = st.selectbox("Cliente:", ["Todos os Clientes"] + CLIENTES)
+with col_refresh_h:
+    st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+    if st.button("🔄 Atualizar agora", use_container_width=True):
+        carregar_dados_banco.clear()
+        st.rerun()
 
 # ============================================================
-# FILTROS
+# CARREGAMENTO DOS DADOS
 # ============================================================
-cli_sel = st.selectbox("Cliente:", ["Todos os Clientes"] + CLIENTES)
-
-df_view = carregar_dados_banco(cli_sel).copy()
+with st.spinner("Carregando dados do banco..."):
+    df_view = carregar_dados_banco(cli_sel).copy()
 
 if not df_view.empty:
     df_view['data_upload'] = pd.to_datetime(df_view.get('data_upload', pd.Series()), errors='coerce')
@@ -401,170 +422,176 @@ if not df_view.empty:
     if pd.notna(ultima_att):
         st.info(f"📅 Última atualização da base para **{cli_sel}**: {ultima_att.strftime('%d/%m/%Y')}")
 
-    st.write("<span class='terminal-label' style='margin-top: 15px;'>Query Filters</span>", unsafe_allow_html=True)
+    # ============================================================
+    # FILTROS (dentro de um expander recolhível)
+    # ============================================================
+    with st.expander("🔍 Filtros", expanded=False):
+        c_de, c_ate = st.columns(2)
+        ano_vigente = datetime.now().year
+        padrao_inicio = datetime(ano_vigente, 1, 1).date()
+        padrao_fim = datetime(ano_vigente, 12, 31).date()
+        with c_de: data_inicio = st.date_input("Data Inicial:", value=padrao_inicio, format="DD/MM/YYYY", key=f"di_{cli_sel}")
+        with c_ate: data_fim = st.date_input("Data Final:", value=padrao_fim, format="DD/MM/YYYY", key=f"df_{cli_sel}")
 
-    c_de, c_ate = st.columns(2)
-    ano_vigente = datetime.now().year
-    padrao_inicio = datetime(ano_vigente, 1, 1).date()
-    padrao_fim = datetime(ano_vigente, 12, 31).date()
-    with c_de: data_inicio = st.date_input("Data Inicial:", value=padrao_inicio, format="DD/MM/YYYY", key=f"di_{cli_sel}")
-    with c_ate: data_fim = st.date_input("Data Final:", value=padrao_fim, format="DD/MM/YYYY", key=f"df_{cli_sel}")
+        if data_inicio and data_fim:
+            mask_data = (df_view['data_publicacao'].dt.date >= data_inicio) & (df_view['data_publicacao'].dt.date <= data_fim)
+            df_view_filtrado_data = df_view[mask_data]
+        else:
+            df_view_filtrado_data = df_view
 
-    if data_inicio and data_fim:
-        mask_data = (df_view['data_publicacao'].dt.date >= data_inicio) & (df_view['data_publicacao'].dt.date <= data_fim)
-        df_view_filtrado_data = df_view[mask_data]
-    else:
-        df_view_filtrado_data = df_view
+        c_est, c_mid = st.columns(2)
+        with c_est:
+            estados_disp = sorted([e for e in df_view_filtrado_data['estado'].unique() if pd.notna(e) and e != ""])
+            filtro_estado = st.multiselect("Filtrar Estado:", estados_disp)
+        with c_mid:
+            midias_disp = sorted([m for m in df_view_filtrado_data['canal'].unique() if pd.notna(m) and m != ""])
+            filtro_midia = st.multiselect("Tipo de Mídia:", midias_disp)
 
-    c_est, c_mid = st.columns(2)
-    with c_est:
-        estados_disp = sorted([e for e in df_view_filtrado_data['estado'].unique() if pd.notna(e) and e != ""])
-        filtro_estado = st.multiselect("Filtrar Estado:", estados_disp)
-    with c_mid:
-        midias_disp = sorted([m for m in df_view_filtrado_data['canal'].unique() if pd.notna(m) and m != ""])
-        filtro_midia = st.multiselect("Tipo de Mídia:", midias_disp)
+        if filtro_estado:
+            df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['estado'].isin(filtro_estado)]
+        if filtro_midia:
+            df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['canal'].isin(filtro_midia)]
 
-    if filtro_estado:
-        df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['estado'].isin(filtro_estado)]
-    if filtro_midia:
-        df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['canal'].isin(filtro_midia)]
+        busca_titulo = st.text_input("Buscar palavra no título:", placeholder="Ex: Skol, campanha, patrocínio...")
+        if busca_titulo:
+            df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['titulo'].astype(str).str.contains(busca_titulo, case=False, na=False)]
 
-    url_busca = st.text_input("Checagem de Duplicidade (URL):", placeholder="Cole o link exato aqui...")
-    if url_busca:
-        df_view_final = df_view_filtrado_data[df_view_filtrado_data['link'].astype(str).str.contains(url_busca, case=False, na=False)]
-    else:
-        df_view_final = df_view_filtrado_data
+        url_busca = st.text_input("Checagem de Duplicidade (URL):", placeholder="Cole o link exato aqui...")
+        if url_busca:
+            df_view_final = df_view_filtrado_data[df_view_filtrado_data['link'].astype(str).str.contains(url_busca, case=False, na=False)]
+        else:
+            df_view_final = df_view_filtrado_data
 
     # ============================================================
-    # RESUMO: CARTÕES DE UM LADO, GRÁFICOS DO OUTRO
+    # ABAS: RESUMO x TABELA COMPLETA
     # ============================================================
-    st.markdown("<span class='terminal-label'>Overview</span><h4>Resumo</h4>", unsafe_allow_html=True)
-
     total_materias = len(df_view_final)
     aud_total = safe_float(df_view_final['audiencia'].apply(limpar_valor_numerico).sum())
     val_total = safe_float(df_view_final.apply(lambda r: extrair_valoracao_real(r['valoracao'], r['sentimento']), axis=1).sum())
 
-    col_cards, col_graficos = st.columns([1, 1.2])
+    aba_resumo, aba_tabela = st.tabs(["📊 Resumo", "📋 Tabela Completa"])
 
-    with col_cards:
-        with st.container(border=True):
-            st.metric("Total de Matérias", total_materias)
-            k1, k2 = st.columns(2)
-            k1.metric("Audiência Est.", formatar_audiencia(aud_total))
-            k2.metric("Valor Editorial", formatar_moeda(val_total))
-            st.markdown("---")
+    with aba_resumo:
+        col_cards, col_graficos = st.columns([1, 1.2])
 
-            st.markdown("<span class='terminal-label'>Distribution</span>", unsafe_allow_html=True)
-            contagem = df_view_final['canal'].value_counts().to_dict()
-            canais_presentes = {}
-            for nome_canal, qtd in contagem.items():
-                if qtd > 0:
-                    n = padronizar_canal(nome_canal)
-                    canais_presentes[n] = canais_presentes.get(n, 0) + qtd
-            canais_ordenados = dict(sorted(canais_presentes.items(), key=lambda item: item[1], reverse=True))
-            itens = list(canais_ordenados.items())
-            n_por_linha = 2
-            for i in range(0, len(itens), n_por_linha):
-                linha = itens[i:i + n_por_linha]
-                linha_cols = st.columns(n_por_linha)
-                for idx, (c_nome, c_qtd) in enumerate(linha):
-                    linha_cols[idx].metric(c_nome, c_qtd)
-
-            st.markdown("---")
-            st.markdown("<span class='terminal-label'>Classificação</span>", unsafe_allow_html=True)
-            if cli_sel == "Ambev":
-                qtd_idm = len(df_view_final[df_view_final['check_idm'].astype(str).str.strip() == "IDM"])
-                qtd_sem_idm = total_materias - qtd_idm
-                c_idm1, c_idm2 = st.columns(2)
-                c_idm1.metric("IDM", qtd_idm)
-                c_idm2.metric("Sem IDM", qtd_sem_idm)
-            elif "tier" in df_view_final.columns:
-                qtd_tier1 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 1"])
-                qtd_tier2 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 2"])
-                c_t1, c_t2 = st.columns(2)
-                c_t1.metric("Tier 1", qtd_tier1)
-                c_t2.metric("Tier 2", qtd_tier2)
-
-    with col_graficos:
-        if total_materias > 0:
+        with col_cards:
             with st.container(border=True):
-                st.markdown("<span class='terminal-label'>Breakdown</span><h4>Tipo de Mídia</h4>", unsafe_allow_html=True)
-                df_canal_padrao = df_view_final['canal'].apply(padronizar_canal)
-                df_pizza = df_canal_padrao.value_counts().reset_index()
-                df_pizza.columns = ['Canal', 'Quantidade']
-                fig_pizza = px.pie(df_pizza, names='Canal', values='Quantidade')
-                fig_pizza.update_traces(textposition='inside', textinfo='percent', hoverinfo='label+percent')
-                fig_pizza.update_layout(margin=dict(t=10, b=10, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", height=280)
-                st.plotly_chart(fig_pizza, use_container_width=True)
+                st.metric("📰 Total de Matérias", total_materias)
+                k1, k2 = st.columns(2)
+                k1.metric("📡 Audiência Est.", formatar_audiencia(aud_total))
+                k2.metric("💰 Valor Editorial", formatar_moeda(val_total))
+                st.markdown("---")
 
-            with st.container(border=True):
-                st.markdown("<span class='terminal-label'>Geomapping</span><h4>Publicações por Estado</h4>", unsafe_allow_html=True)
-                df_barras = df_view_final['estado'].value_counts().reset_index()
-                df_barras.columns = ['Estado', 'Quantidade']
-                fig_barras = px.bar(df_barras, x='Estado', y='Quantidade', text_auto=True)
-                fig_barras.update_traces(marker_color='#6C5CE7')
-                fig_barras.update_layout(xaxis_title="", yaxis_title="Publicações", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", margin=dict(t=10, b=10, l=0, r=0), height=280)
-                st.plotly_chart(fig_barras, use_container_width=True)
-        else:
-            st.info("Sem dados suficientes para gerar gráficos.")
+                st.markdown("<span class='terminal-label'>📡 Distribution</span>", unsafe_allow_html=True)
+                contagem = df_view_final['canal'].value_counts().to_dict()
+                canais_presentes = {}
+                for nome_canal, qtd in contagem.items():
+                    if qtd > 0:
+                        n = padronizar_canal(nome_canal)
+                        canais_presentes[n] = canais_presentes.get(n, 0) + qtd
+                canais_ordenados = dict(sorted(canais_presentes.items(), key=lambda item: item[1], reverse=True))
+                itens = list(canais_ordenados.items())
+                n_por_linha = 2
+                for i in range(0, len(itens), n_por_linha):
+                    linha = itens[i:i + n_por_linha]
+                    linha_cols = st.columns(n_por_linha)
+                    for idx, (c_nome, c_qtd) in enumerate(linha):
+                        linha_cols[idx].metric(c_nome, c_qtd)
 
-    st.markdown("---")
+                st.markdown("---")
+                st.markdown("<span class='terminal-label'>🏷️ Classificação</span>", unsafe_allow_html=True)
+                if cli_sel == "Ambev":
+                    qtd_idm = len(df_view_final[df_view_final['check_idm'].astype(str).str.strip() == "IDM"])
+                    qtd_sem_idm = total_materias - qtd_idm
+                    c_idm1, c_idm2 = st.columns(2)
+                    c_idm1.metric("IDM", qtd_idm)
+                    c_idm2.metric("Sem IDM", qtd_sem_idm)
+                elif "tier" in df_view_final.columns:
+                    qtd_tier1 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 1"])
+                    qtd_tier2 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 2"])
+                    c_t1, c_t2 = st.columns(2)
+                    c_t1.metric("Tier 1", qtd_tier1)
+                    c_t2.metric("Tier 2", qtd_tier2)
 
-    # ============================================================
-    # TABELA E EXPORTAÇÃO
-    # ============================================================
-    df_preview = df_view_final.copy()
-    df_preview['data_formatada'] = df_preview['data_publicacao'].dt.tz_localize(None)
-    df_preview['audiencia'] = df_preview['audiencia'].apply(limpar_valor_numerico)
-    df_preview['valoracao'] = df_preview.apply(lambda r: extrair_valoracao_real(r['valoracao'], r['sentimento']), axis=1)
+        with col_graficos:
+            if total_materias > 0:
+                with st.container(border=True):
+                    st.markdown("<span class='terminal-label'>Breakdown</span><h4>Tipo de Mídia</h4>", unsafe_allow_html=True)
+                    df_canal_padrao = df_view_final['canal'].apply(padronizar_canal)
+                    df_pizza = df_canal_padrao.value_counts().reset_index()
+                    df_pizza.columns = ['Canal', 'Quantidade']
+                    fig_pizza = px.pie(df_pizza, names='Canal', values='Quantidade')
+                    fig_pizza.update_traces(textposition='inside', textinfo='percent', hoverinfo='label+percent')
+                    fig_pizza.update_layout(margin=dict(t=10, b=10, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", height=280)
+                    st.plotly_chart(fig_pizza, use_container_width=True)
 
-    colunas_map = {
-        'data_formatada': 'Data',
-        'cliente': 'Cliente',
-        'release_tema': 'Tema',
-        'titulo': 'Título',
-        'veiculo_nome': 'Veículo',
-        'canal': 'Tipo de Veículo',
-        'sentimento': 'Sentimento',
-        'audiencia': 'Audiência online',
-        'valoracao': 'Valoração',
-        'localizacao': 'Localização'
-    }
-    if cli_sel == "Ambev":
-        colunas_map['check_idm'] = 'IDM'
-    else:
-        colunas_map['tier'] = 'Tier'
-    colunas_map['link'] = 'Link'
+                with st.container(border=True):
+                    st.markdown("<span class='terminal-label'>Geomapping</span><h4>Publicações por Estado</h4>", unsafe_allow_html=True)
+                    df_barras = df_view_final['estado'].value_counts().reset_index()
+                    df_barras.columns = ['Estado', 'Quantidade']
+                    fig_barras = px.bar(df_barras, x='Estado', y='Quantidade', text_auto=True)
+                    fig_barras.update_traces(marker_color='#6C5CE7')
+                    fig_barras.update_layout(xaxis_title="", yaxis_title="Publicações", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", margin=dict(t=10, b=10, l=0, r=0), height=280)
+                    st.plotly_chart(fig_barras, use_container_width=True)
+            else:
+                st.info("Sem dados suficientes para gerar gráficos.")
 
-    for col_db in colunas_map.keys():
-        if col_db not in df_preview.columns: df_preview[col_db] = ""
+    with aba_tabela:
+        # ============================================================
+        # TABELA E EXPORTAÇÃO
+        # ============================================================
+        df_preview = df_view_final.copy()
+        df_preview['data_formatada'] = df_preview['data_publicacao'].dt.tz_localize(None)
+        df_preview['audiencia'] = df_preview['audiencia'].apply(limpar_valor_numerico)
+        df_preview['valoracao'] = df_preview.apply(lambda r: extrair_valoracao_real(r['valoracao'], r['sentimento']), axis=1)
 
-    df_final_preview = df_preview[list(colunas_map.keys())].rename(columns=colunas_map)
-    df_final_preview = df_final_preview.sort_values(by='Data', ascending=False)
-
-    c_titulo, c_botao = st.columns([3, 1])
-    with c_titulo:
-        st.markdown("<span class='terminal-label'>Output</span><h4>Preview da Exportação</h4>", unsafe_allow_html=True)
-    with c_botao:
-        df_final_export = df_final_preview.sort_values(by='Data', ascending=True)
-        excel_data = converter_df_para_excel(df_final_export)
-        nome_arq = f"Consulta de Monitoramento — {cli_sel} {data_inicio.strftime('%d-%m')} a {data_fim.strftime('%d-%m')} | LK.xlsx"
-        st.download_button(label="EXPORTAR EXCEL", data=excel_data, file_name=nome_arq,
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
-
-    st.dataframe(
-        df_final_preview,
-        use_container_width=True,
-        height=500,
-        hide_index=True,
-        column_config={
-            "Data": st.column_config.DatetimeColumn("Data", format="DD/MM/YYYY"),
-            "Audiência online": st.column_config.NumberColumn("Audiência online", format="%d"),
-            "Valoração": st.column_config.NumberColumn("Valoração", format="R$ %.2f"),
-            "Link": st.column_config.LinkColumn("Link"),
+        colunas_map = {
+            'data_formatada': 'Data',
+            'cliente': 'Cliente',
+            'release_tema': 'Tema',
+            'titulo': 'Título',
+            'veiculo_nome': 'Veículo',
+            'canal': 'Tipo de Veículo',
+            'sentimento': 'Sentimento',
+            'audiencia': 'Audiência online',
+            'valoracao': 'Valoração',
+            'localizacao': 'Localização'
         }
-    )
+        if cli_sel == "Ambev":
+            colunas_map['check_idm'] = 'IDM'
+        else:
+            colunas_map['tier'] = 'Tier'
+        colunas_map['link'] = 'Link'
+
+        for col_db in colunas_map.keys():
+            if col_db not in df_preview.columns: df_preview[col_db] = ""
+
+        df_final_preview = df_preview[list(colunas_map.keys())].rename(columns=colunas_map)
+        df_final_preview = df_final_preview.sort_values(by='Data', ascending=False)
+
+        c_titulo, c_botao = st.columns([3, 1])
+        with c_titulo:
+            st.markdown("<span class='terminal-label'>Output</span><h4>Preview da Exportação</h4>", unsafe_allow_html=True)
+        with c_botao:
+            df_final_export = df_final_preview.sort_values(by='Data', ascending=True)
+            excel_data = converter_df_para_excel(df_final_export)
+            nome_arq = f"Consulta de Monitoramento — {cli_sel} {data_inicio.strftime('%d-%m')} a {data_fim.strftime('%d-%m')} | LK.xlsx"
+            st.download_button(label="EXPORTAR EXCEL", data=excel_data, file_name=nome_arq,
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                               use_container_width=True)
+
+        st.dataframe(
+            df_final_preview,
+            use_container_width=True,
+            height=500,
+            hide_index=True,
+            column_config={
+                "Data": st.column_config.DatetimeColumn("Data", format="DD/MM/YYYY"),
+                "Audiência online": st.column_config.NumberColumn("Audiência online", format="%d"),
+                "Valoração": st.column_config.NumberColumn("Valoração", format="R$ %.2f"),
+                "Link": st.column_config.LinkColumn("Link"),
+            }
+        )
 else:
     st.info("Nenhum registro encontrado no banco de dados.")
 
