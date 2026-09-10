@@ -536,12 +536,16 @@ if not df_view.empty:
             with st.container(border=True):
                 st.markdown("<span class='terminal-label'>Trend</span><h4>Evolução de Matérias no Tempo</h4>", unsafe_allow_html=True)
 
+                # ============================================================
+                # BLOCO ALTERADO: Lógica de Agrupamento e Rótulos no Gráfico
+                # ============================================================
                 delta_dias_periodo = (data_fim - data_inicio).days if data_inicio and data_fim else 0
+                
                 if delta_dias_periodo <= 60:
                     freq_agrupamento = 'D'
                     formato_label = '%d/%m'
-                elif delta_dias_periodo <= 400:
-                    freq_agrupamento = 'W'
+                elif delta_dias_periodo <= 365:
+                    freq_agrupamento = 'W-MON'
                     formato_label = '%d/%m'
                 else:
                     freq_agrupamento = 'ME'
@@ -550,16 +554,26 @@ if not df_view.empty:
                 df_evolucao = df_view_final.set_index('data_publicacao').resample(freq_agrupamento).size().reset_index(name='Quantidade')
                 df_evolucao['Rótulo'] = df_evolucao['data_publicacao'].dt.strftime(formato_label)
 
-                fig_evolucao = px.line(df_evolucao, x='Rótulo', y='Quantidade', markers=True)
-                fig_evolucao.update_traces(line_color='#6C5CE7', line_shape='spline', marker=dict(color='#6C5CE7', size=6))
+                fig_evolucao = px.line(df_evolucao, x='Rótulo', y='Quantidade', text='Quantidade', markers=True)
+                
+                fig_evolucao.update_traces(
+                    line_color='#6C5CE7', 
+                    line_shape='spline', 
+                    marker=dict(color='#6C5CE7', size=7),
+                    textposition='top center',
+                    textfont=dict(size=13, color='#2D2A4A', family='Inter')
+                )
+                
                 fig_evolucao.update_layout(
                     xaxis_title="", yaxis_title="Matérias",
                     plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                    margin=dict(t=10, b=10, l=0, r=0), height=280
+                    margin=dict(t=30, b=10, l=0, r=0), height=300
                 )
                 fig_evolucao.update_xaxes(showgrid=False)
                 fig_evolucao.update_yaxes(showgrid=True, gridcolor='#ECEBFA')
+                
                 st.plotly_chart(fig_evolucao, use_container_width=True)
+                # ============================================================
 
     with aba_tabela:
         # ============================================================
