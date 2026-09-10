@@ -467,7 +467,7 @@ if not df_view.empty:
     aba_resumo, aba_tabela = st.tabs(["📊 Resumo", "📋 Tabela Completa"])
 
     with aba_resumo:
-        col_cards, col_graficos = st.columns([1, 1.2])
+        col_cards, col_pizza, col_barra = st.columns([2, 1, 1])
 
         with col_cards:
             with st.container(border=True):
@@ -508,27 +508,29 @@ if not df_view.empty:
                     c_t1.metric("Tier 1", qtd_tier1)
                     c_t2.metric("Tier 2", qtd_tier2)
 
-        with col_graficos:
-            if total_materias > 0:
+        if total_materias > 0:
+            with col_pizza:
                 with st.container(border=True):
                     st.markdown("<span class='terminal-label'>Breakdown</span><h4>Tipo de Mídia</h4>", unsafe_allow_html=True)
                     df_canal_padrao = df_view_final['canal'].apply(padronizar_canal)
                     df_pizza = df_canal_padrao.value_counts().reset_index()
                     df_pizza.columns = ['Canal', 'Quantidade']
                     fig_pizza = px.pie(df_pizza, names='Canal', values='Quantidade')
-                    fig_pizza.update_traces(textposition='inside', textinfo='percent', hoverinfo='label+percent')
-                    fig_pizza.update_layout(margin=dict(t=10, b=10, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", height=280)
+                    fig_pizza.update_traces(textposition='inside', textinfo='percent', hoverinfo='label+percent', showlegend=False)
+                    fig_pizza.update_layout(margin=dict(t=10, b=10, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", height=420)
                     st.plotly_chart(fig_pizza, use_container_width=True)
 
+            with col_barra:
                 with st.container(border=True):
                     st.markdown("<span class='terminal-label'>Geomapping</span><h4>Publicações por Estado</h4>", unsafe_allow_html=True)
                     df_barras = df_view_final['estado'].value_counts().reset_index()
                     df_barras.columns = ['Estado', 'Quantidade']
                     fig_barras = px.bar(df_barras, x='Estado', y='Quantidade', text_auto=True)
                     fig_barras.update_traces(marker_color='#6C5CE7')
-                    fig_barras.update_layout(xaxis_title="", yaxis_title="Publicações", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", margin=dict(t=10, b=10, l=0, r=0), height=280)
+                    fig_barras.update_layout(xaxis_title="", yaxis_title="Publicações", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", margin=dict(t=10, b=10, l=0, r=0), height=420)
                     st.plotly_chart(fig_barras, use_container_width=True)
-            else:
+        else:
+            with col_pizza:
                 st.info("Sem dados suficientes para gerar gráficos.")
 
     with aba_tabela:
