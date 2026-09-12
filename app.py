@@ -479,9 +479,12 @@ if not df_view.empty:
 
         with col_cards:
             with st.container(border=True):
-                st.metric("📰 Total de Matérias", total_materias)
+                # Aplicando formatação no total de matérias
+                st.metric("📰 Total de Matérias", formatar_numero_br(total_materias, 0))
+                
                 k1, k2 = st.columns(2)
-                k1.metric("📡 Audiência Est.", formatar_audiencia(aud_total))
+                # Trocando o texto de 'Audiência Est.' para 'Audiência Estimada'
+                k1.metric("📡 Audiência Estimada", formatar_audiencia(aud_total))
                 k2.metric("💰 Valor Editorial", formatar_moeda(val_total))
                 st.markdown("---")
 
@@ -499,7 +502,8 @@ if not df_view.empty:
                     linha = itens[i:i + n_por_linha]
                     linha_cols = st.columns(n_por_linha)
                     for idx, (c_nome, c_qtd) in enumerate(linha):
-                        linha_cols[idx].metric(c_nome, c_qtd)
+                        # Aplicando formatação na distribuição dos canais
+                        linha_cols[idx].metric(c_nome, formatar_numero_br(c_qtd, 0))
 
                 st.markdown("---")
                 st.markdown("<span class='terminal-label'>🏷️ Classificação</span>", unsafe_allow_html=True)
@@ -507,14 +511,14 @@ if not df_view.empty:
                     qtd_idm = len(df_view_final[df_view_final['check_idm'].astype(str).str.strip() == "IDM"])
                     qtd_sem_idm = total_materias - qtd_idm
                     c_idm1, c_idm2 = st.columns(2)
-                    c_idm1.metric("IDM", qtd_idm)
-                    c_idm2.metric("Sem IDM", qtd_sem_idm)
+                    c_idm1.metric("IDM", formatar_numero_br(qtd_idm, 0))
+                    c_idm2.metric("Sem IDM", formatar_numero_br(qtd_sem_idm, 0))
                 elif "tier" in df_view_final.columns:
                     qtd_tier1 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 1"])
                     qtd_tier2 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 2"])
                     c_t1, c_t2 = st.columns(2)
-                    c_t1.metric("Tier 1", qtd_tier1)
-                    c_t2.metric("Tier 2", qtd_tier2)
+                    c_t1.metric("Tier 1", formatar_numero_br(qtd_tier1, 0))
+                    c_t2.metric("Tier 2", formatar_numero_br(qtd_tier2, 0))
 
         with col_graficos:
             if total_materias > 0:
