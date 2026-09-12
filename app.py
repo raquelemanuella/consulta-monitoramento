@@ -283,12 +283,20 @@ def padronizar_canal(c_str):
     if pd.isna(c_str): return "Portal de Notícias"
     c_str = str(c_str).strip()
     c_lower = c_str.lower()
-    if c_lower in ["online", "web", "internet", "portal correio", "portal a tarde", "ibahia", "bnews", "portal", "site"]: return "Portal de Notícias"
-    if c_lower in ["mídia impressa", "impresso", "jornal", "jornal impresso", "revista"]: return "Impresso"
-    if c_lower in ["televisão", "tv", "televisao", "telejornal", "band", "record", "globo"]: return "TV"
-    if c_lower in ["radio", "rádio", "fm", "am"]: return "Rádio"
-    if c_lower in ["x", "twitter", "x/twitter", "x / twitter"]: return "X / Twitter"
-    return c_str.title() if c_str else "Portal de Notícias"
+    if c_lower in ["online", "web", "internet", "portal correio", "portal a tarde", "ibahia", "bnews", "portal", "site", "portal de notícias", "portal de noticias"]: 
+        return "Portal de Notícias"
+    if c_lower in ["mídia impressa", "impresso", "jornal", "jornal impresso", "revista"]: 
+        return "Impresso"
+    if c_lower in ["televisão", "tv", "televisao", "telejornal", "band", "record", "globo"]: 
+        return "TV"
+    if c_lower in ["radio", "rádio", "fm", "am"]: 
+        return "Rádio"
+    if c_lower in ["x", "twitter", "x/twitter", "x / twitter"]: 
+        return "X / Twitter"
+    
+    # Converte para título e corrige preposições
+    resultado = c_str.title() if c_str else "Portal de Notícias"
+    return resultado.replace(" De ", " de ").replace(" Da ", " da ").replace(" Do ", " do ")
 
 def inferir_estado(cliente, veiculo, localizacao):
     if pd.notna(veiculo) and str(veiculo).strip() != "":
@@ -418,6 +426,7 @@ with st.spinner("Carregando dados do banco..."):
     df_view = carregar_dados_banco(cli_sel).copy()
 
 if not df_view.empty:
+    df_view['canal'] = df_view['canal'].apply(padronizar_canal)
     df_view['data_upload'] = pd.to_datetime(df_view.get('data_upload', pd.Series()), errors='coerce')
     if 'data_publicacao' in df_view.columns:
         df_view['data_publicacao'] = pd.to_datetime(df_view['data_publicacao'], errors='coerce')
