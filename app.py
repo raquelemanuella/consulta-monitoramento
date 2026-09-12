@@ -569,9 +569,6 @@ if not df_view.empty:
             with st.container(border=True):
                 st.markdown("<span class='terminal-label'>Trend</span><h4>Evolução de Matérias no Tempo</h4>", unsafe_allow_html=True)
 
-                # ============================================================
-                # BLOCO ALTERADO: Lógica de Agrupamento e Rótulos no Gráfico
-                # ============================================================
                 delta_dias_periodo = (data_fim - data_inicio).days if data_inicio and data_fim else 0
                 
                 if delta_dias_periodo <= 60:
@@ -587,6 +584,10 @@ if not df_view.empty:
                 df_evolucao = df_view_final.set_index('data_publicacao').resample(freq_agrupamento).size().reset_index(name='Quantidade')
                 df_evolucao['Rótulo'] = df_evolucao['data_publicacao'].dt.strftime(formato_label)
 
+                # 1. Calcula o maior valor do período e define 20% de folga no topo
+                max_materias = df_evolucao['Quantidade'].max() if not df_evolucao.empty else 0
+                teto_eixo_y = max_materias * 1.20 if max_materias > 0 else 10
+
                 fig_evolucao = px.line(df_evolucao, x='Rótulo', y='Quantidade', text='Quantidade', markers=True)
                 
                 fig_evolucao.update_traces(
@@ -600,10 +601,12 @@ if not df_view.empty:
                 fig_evolucao.update_layout(
                     xaxis_title="", yaxis_title="Matérias",
                     plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                    margin=dict(t=30, b=10, l=0, r=0), height=300
+                    margin=dict(t=30, b=10, l=0, r=0), height=320
                 )
                 fig_evolucao.update_xaxes(showgrid=False)
-                fig_evolucao.update_yaxes(showgrid=True, gridcolor='#ECEBFA')
+                
+                # 2. Trava o alcance do Eixo Y garantindo que o teto seja sempre maior que o maior valor
+                fig_evolucao.update_yaxes(showgrid=True, gridcolor='#ECEBFA', range=[0, teto_eixo_y])
                 
                 st.plotly_chart(fig_evolucao, use_container_width=True)
                 # ============================================================
