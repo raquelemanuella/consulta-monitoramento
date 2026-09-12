@@ -487,7 +487,7 @@ if not df_view.empty:
 
     ultima_att = df_view['data_upload'].max()
     if pd.notna(ultima_att):
-        st.info(f"📅 Última atualização da base para **{cli_sel}**: {ultima_att.strftime('%d/%m/%Y')}")
+        st.info(f"📅 Última atualização da base para **{cli_sel}**: {ultima_att.strftime('%d/%m/%Y às %H:%H')}")
 
     total_materias = len(df_view_final)
     aud_total = safe_float(df_view_final['audiencia'].apply(limpar_valor_numerico).sum())
