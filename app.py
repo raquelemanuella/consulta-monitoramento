@@ -245,19 +245,27 @@ def extrair_valoracao_real(valor_str, sentimento_str):
         return -abs(v)
     return abs(v)
 
+def formatar_numero_br(valor, casas_decimais=0):
+    # Formata no padrão americano primeiro
+    numero_formatado = f"{valor:,.{casas_decimais}f}"
+    # Aplica o truque de substituição para o padrão brasileiro
+    return numero_formatado.replace(",", "X").replace(".", ",").replace("X", ".")
+
 def formatar_audiencia(valor):
     valor = safe_float(valor)
-    if valor >= 1_000_000: return f"{valor/1_000_000:.1f} mi"
-    if valor >= 1_000: return f"{valor/1_000:.1f} mil"
-    return f"{valor:.0f}"
+    if valor >= 1_000_000: 
+        return f"{formatar_numero_br(valor/1_000_000, 1)} mi"
+    if valor >= 1_000: 
+        return f"{formatar_numero_br(valor/1_000, 1)} mil"
+    return formatar_numero_br(valor, 0)
 
 def formatar_moeda(valor):
     valor = safe_float(valor)
     sinal = "-" if valor < 0 else ""
     v_abs = abs(valor)
     if v_abs >= 1_000_000:
-        return f"{sinal}R$ {v_abs/1_000_000:.1f} mi"
-    return f"{sinal}R$ {v_abs:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"{sinal}R$ {formatar_numero_br(v_abs/1_000_000, 1)} mi"
+    return f"{sinal}R$ {formatar_numero_br(v_abs, 2)}"
 
 def padronizar_canal(c_str):
     if pd.isna(c_str): return "Portal de Notícias"
