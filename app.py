@@ -347,7 +347,7 @@ def get_client() -> Client:
 
 supabase = get_client()
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner=False)
 def carregar_dados_banco(cliente):
     todos_dados = []
     tamanho_pagina = 1000
