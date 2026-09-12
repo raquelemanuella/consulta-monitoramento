@@ -465,7 +465,7 @@ if not df_view.empty:
         if filtro_midia:
             df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['canal'].isin(filtro_midia)]
 
-        busca_titulo = st.text_input("Buscar palavra no título:", placeholder="Ex: Skol, campanha...")
+        busca_titulo = st.text_input("Buscar palavra no título:", placeholder="Ex: Skol, Brilux...")
         if busca_titulo:
             df_view_filtrado_data = df_view_filtrado_data[df_view_filtrado_data['titulo'].astype(str).str.contains(busca_titulo, case=False, na=False)]
 
