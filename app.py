@@ -76,9 +76,18 @@ st.markdown("""
         font-size: 11px !important;
         font-weight: 600 !important;
         color: #8B87A8 !important;
-        text-align: center !important;
+        /* O truque do alinhamento perfeito para o título começa aqui */
+        display: flex !important;
+        width: 100% !important;
         justify-content: center !important;
+        text-align: center !important;
         margin-bottom: 8px !important;
+    }
+
+    /* O Streamlit cria uma <div> extra escondida dentro do título que também precisamos domar */
+    [data-testid="stMetricLabel"] > div {
+        justify-content: center !important;
+        margin: 0 auto !important;
     }
 
     [data-testid="stMetricValue"] {
@@ -86,8 +95,11 @@ st.markdown("""
         font-size: clamp(16px, 2.5vw, 28px) !important;
         font-weight: 700 !important;
         color: #6C5CE7 !important;
-        text-align: center !important;
+        /* Mesma lógica de alinhamento perfeito para o número */
+        display: flex !important;
+        width: 100% !important;
         justify-content: center !important;
+        text-align: center !important;
         word-break: break-word !important;
         line-height: 1.2 !important;
     }
