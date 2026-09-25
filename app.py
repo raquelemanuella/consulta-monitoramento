@@ -76,7 +76,6 @@ st.markdown("""
         font-size: 11px !important;
         font-weight: 600 !important;
         color: #8B87A8 !important;
-        /* O truque do alinhamento perfeito para o título começa aqui */
         display: flex !important;
         width: 100% !important;
         justify-content: center !important;
@@ -84,7 +83,6 @@ st.markdown("""
         margin-bottom: 8px !important;
     }
 
-    /* O Streamlit cria uma <div> extra escondida dentro do título que também precisamos domar */
     [data-testid="stMetricLabel"] > div {
         justify-content: center !important;
         margin: 0 auto !important;
@@ -95,7 +93,6 @@ st.markdown("""
         font-size: clamp(16px, 2.5vw, 28px) !important;
         font-weight: 700 !important;
         color: #6C5CE7 !important;
-        /* Mesma lógica de alinhamento perfeito para o número */
         display: flex !important;
         width: 100% !important;
         justify-content: center !important;
@@ -258,9 +255,7 @@ def extrair_valoracao_real(valor_str, sentimento_str):
     return abs(v)
 
 def formatar_numero_br(valor, casas_decimais=0):
-    # Formata no padrão americano primeiro
     numero_formatado = f"{valor:,.{casas_decimais}f}"
-    # Aplica o truque de substituição para o padrão brasileiro
     return numero_formatado.replace(",", "X").replace(".", ",").replace("X", ".")
 
 def formatar_audiencia(valor):
@@ -294,7 +289,6 @@ def padronizar_canal(c_str):
     if c_lower in ["x", "twitter", "x/twitter", "x / twitter"]: 
         return "X / Twitter"
     
-    # Converte para título e corrige preposições
     resultado = c_str.title() if c_str else "Portal de Notícias"
     return resultado.replace(" De ", " de ").replace(" Da ", " da ").replace(" Do ", " do ")
 
@@ -428,6 +422,13 @@ with st.spinner("Carregando dados do banco..."):
 if not df_view.empty:
     df_view['canal'] = df_view['canal'].apply(padronizar_canal)
     df_view['data_upload'] = pd.to_datetime(df_view.get('data_upload', pd.Series()), errors='coerce')
+    
+    # --- TRATAMENTO DE FUSO HORÁRIO ---
+    if df_view['data_upload'].dt.tz is None:
+        df_view['data_upload'] = df_view['data_upload'].dt.tz_localize('UTC').dt.tz_convert('America/Bahia')
+    else:
+        df_view['data_upload'] = df_view['data_upload'].dt.tz_convert('America/Bahia')
+    
     if 'data_publicacao' in df_view.columns:
         df_view['data_publicacao'] = pd.to_datetime(df_view['data_publicacao'], errors='coerce')
         df_view['data_publicacao'] = df_view['data_publicacao'].fillna(df_view['data_upload']).fillna(pd.Timestamp.now())
@@ -485,9 +486,11 @@ if not df_view.empty:
     # ============================================================
     st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
 
-    ultima_att = df_view['data_upload'].max()
-    if pd.notna(ultima_att):
-        st.info(f"📅 Última atualização da base para **{cli_sel}**: {ultima_att.strftime('%d/%m/%Y às %H:%M')}")
+    # --- CONTROLE DE EXIBIÇÃO DO AVISO ---
+    if cli_sel != "Todos os Clientes":
+        ultima_att = df_view['data_upload'].max()
+        if pd.notna(ultima_att):
+            st.info(f"📅 Última atualização da base para **{cli_sel}**: {ultima_att.strftime('%d/%m/%Y às %H:%M')}")
 
     total_materias = len(df_view_final)
     aud_total = safe_float(df_view_final['audiencia'].apply(limpar_valor_numerico).sum())
@@ -500,11 +503,9 @@ if not df_view.empty:
 
         with col_cards:
             with st.container(border=True):
-                # Aplicando formatação no total de matérias
                 st.metric("📰 Total de Matérias", formatar_numero_br(total_materias, 0))
                 
                 k1, k2 = st.columns(2)
-                # Trocando o texto de 'Audiência Est.' para 'Audiência Estimada'
                 k1.metric("📡 Audiência Estimada", formatar_audiencia(aud_total))
                 k2.metric("💰 Valor Editorial", formatar_moeda(val_total))
                 st.markdown("---")
@@ -523,7 +524,6 @@ if not df_view.empty:
                     linha = itens[i:i + n_por_linha]
                     linha_cols = st.columns(n_por_linha)
                     for idx, (c_nome, c_qtd) in enumerate(linha):
-                        # Aplicando formatação na distribuição dos canais
                         linha_cols[idx].metric(c_nome, formatar_numero_br(c_qtd, 0))
 
                 st.markdown("---")
@@ -584,7 +584,6 @@ if not df_view.empty:
                 df_evolucao = df_view_final.set_index('data_publicacao').resample(freq_agrupamento).size().reset_index(name='Quantidade')
                 df_evolucao['Rótulo'] = df_evolucao['data_publicacao'].dt.strftime(formato_label)
 
-                # 1. Calcula o maior valor do período e define 20% de folga no topo
                 max_materias = df_evolucao['Quantidade'].max() if not df_evolucao.empty else 0
                 teto_eixo_y = max_materias * 1.20 if max_materias > 0 else 10
 
@@ -605,11 +604,9 @@ if not df_view.empty:
                 )
                 fig_evolucao.update_xaxes(showgrid=False)
                 
-                # 2. Trava o alcance do Eixo Y garantindo que o teto seja sempre maior que o maior valor
                 fig_evolucao.update_yaxes(showgrid=True, gridcolor='#ECEBFA', range=[0, teto_eixo_y])
                 
                 st.plotly_chart(fig_evolucao, use_container_width=True)
-                # ============================================================
 
     with aba_tabela:
         # ============================================================
