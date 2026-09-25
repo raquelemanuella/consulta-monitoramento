@@ -3,6 +3,7 @@ import pandas as pd
 from supabase import create_client, Client
 import io
 import re
+import requests
 from datetime import datetime, timedelta
 import plotly.express as px
 
@@ -351,6 +352,43 @@ def inferir_estado(cliente, veiculo, localizacao):
         if "brasil" in loc: return "Nacional"
         return "Internacional"
     return "Nacional"
+
+def gerar_resumo_executivo(prompt_dados):
+    try:
+        api_key = st.secrets["OPENROUTER_API_KEY"]
+    except Exception:
+        return None, "Chave da API não configurada nos Secrets (OPENROUTER_API_KEY)."
+
+    try:
+        resposta = requests.post(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "openrouter/free",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "Você é um analista de monitoramento de mídia de uma agência de comunicação. "
+                            "Escreva resumos executivos curtos (3 a 4 frases), diretos e profissionais, em "
+                            "português do Brasil, usando apenas os dados fornecidos. Nunca invente números."
+                        ),
+                    },
+                    {"role": "user", "content": prompt_dados},
+                ],
+                "temperature": 0.4,
+            },
+            timeout=30,
+        )
+        resposta.raise_for_status()
+        dados_resp = resposta.json()
+        texto = dados_resp["choices"][0]["message"]["content"].strip()
+        return texto, None
+    except Exception as e:
+        return None, f"Não foi possível gerar o resumo agora. Detalhe: {e}"
 
 def converter_df_para_excel(df):
     output = io.BytesIO()
@@ -707,6 +745,49 @@ if not df_view.empty:
                     st.plotly_chart(fig_ranking, use_container_width=True)
                 else:
                     st.info("Nenhum veículo Tier 1 / IDM encontrado nesse período com os filtros atuais.")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        if total_materias > 0:
+            with st.container(border=True):
+                st.markdown("<span class='terminal-label'>IA</span><h4>🧠 Resumo Executivo</h4>", unsafe_allow_html=True)
+
+                chave_atual = f"{cli_sel}_{data_inicio}_{data_fim}_{filtro_estado}_{filtro_midia}_{busca_titulo}"
+
+                if st.button("Gerar resumo executivo"):
+                    canal_principal = itens[0][0] if itens else "N/A"
+                    estado_principal = (
+                        df_barras.sort_values(by='Quantidade', ascending=False).iloc[0]['Estado']
+                        if not df_barras.empty else "N/A"
+                    )
+                    sentimento_valido = df_view_final['sentimento'].astype(str).str.strip()
+                    sentimento_valido = sentimento_valido[sentimento_valido != ""]
+                    sentimento_predominante_txt = sentimento_valido.mode()[0] if not sentimento_valido.empty else "N/A"
+                    variacao_txt = calcular_delta(total_materias, total_materias_ant, "") or "sem período anterior para comparar"
+
+                    prompt_dados = f"""Escreva um resumo executivo sobre o monitoramento de mídia do cliente "{cli_sel}", \
+referente ao período de {data_inicio.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}, com base apenas nestes dados:
+- Total de matérias: {formatar_numero_br(total_materias, 0)}
+- Variação frente ao período anterior: {variacao_txt}
+- Audiência estimada: {formatar_audiencia(aud_total)}
+- Valor editorial: {formatar_moeda(val_total)}
+- Sentimento predominante: {sentimento_predominante_txt}
+- Canal com mais menções: {canal_principal}
+- Estado com mais publicações: {estado_principal}
+
+Não invente nenhum número fora dos listados acima. Tom profissional, para um cliente de agência de comunicação."""
+
+                    with st.spinner("Gerando resumo com IA..."):
+                        texto_resumo, erro = gerar_resumo_executivo(prompt_dados)
+
+                    if erro:
+                        st.warning(erro)
+                    else:
+                        st.session_state[f'resumo_executivo_{chave_atual}'] = texto_resumo
+
+                if f'resumo_executivo_{chave_atual}' in st.session_state:
+                    st.markdown(st.session_state[f'resumo_executivo_{chave_atual}'])
+                else:
+                    st.caption("Clique no botão para gerar um resumo automático com base nos dados filtrados.")
 
     with aba_tabela:
         # ============================================================
