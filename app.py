@@ -485,8 +485,6 @@ if not df_view.empty:
     # ============================================================
     st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
 
-   # Verificamos se o usuário escolheu um cliente específico antes de mostrar o aviso
-if cli_sel != "Todos os Clientes":
     ultima_att = df_view['data_upload'].max()
     if pd.notna(ultima_att):
         st.info(f"📅 Última atualização da base para **{cli_sel}**: {ultima_att.strftime('%d/%m/%Y às %H:%M')}")
