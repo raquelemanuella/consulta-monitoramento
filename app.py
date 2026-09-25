@@ -354,7 +354,7 @@ def converter_df_para_excel(df):
     return output.getvalue()
 
 # ============================================================
-# CONEXÃO COM O BANCO (via Supabase Client, com anon key + RLS)
+# CONEXÃO COM O BANCO (via Supabase Client)
 # ============================================================
 try:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -414,31 +414,39 @@ with st.sidebar:
         st.rerun()
 
 # ============================================================
-# CARREGAMENTO DOS DADOS
+# CARREGAMENTO E TRATAMENTO DOS DADOS
 # ============================================================
 with st.spinner("Carregando dados do banco..."):
     df_view = carregar_dados_banco(cli_sel).copy()
 
 if not df_view.empty:
     df_view['canal'] = df_view['canal'].apply(padronizar_canal)
-    df_view['data_upload'] = pd.to_datetime(df_view.get('data_upload', pd.Series()), errors='coerce')
     
-    # --- TRATAMENTO DE FUSO HORÁRIO ---
+    # 1. TRATAMENTO DE FUSO HORÁRIO EM DATA_UPLOAD
+    df_view['data_upload'] = pd.to_datetime(df_view.get('data_upload', pd.Series()), errors='coerce')
     if df_view['data_upload'].dt.tz is None:
         df_view['data_upload'] = df_view['data_upload'].dt.tz_localize('UTC').dt.tz_convert('America/Bahia')
     else:
         df_view['data_upload'] = df_view['data_upload'].dt.tz_convert('America/Bahia')
     
+    # 2. TRATAMENTO DE FUSO HORÁRIO EM DATA_PUBLICACAO (MESMO PADRÃO TZ-AWARE)
     if 'data_publicacao' in df_view.columns:
-        df_view['data_publicacao'] = pd.to_datetime(df_view['data_publicacao'], errors='coerce')
-        df_view['data_publicacao'] = df_view['data_publicacao'].fillna(df_view['data_upload']).fillna(pd.Timestamp.now())
+        s_pub = pd.to_datetime(df_view['data_publicacao'], errors='coerce')
+        if s_pub.dt.tz is None:
+            df_view['data_publicacao'] = s_pub.dt.tz_localize('America/Bahia')
+        else:
+            df_view['data_publicacao'] = s_pub.dt.tz_convert('America/Bahia')
     else:
-        df_view['data_publicacao'] = df_view['data_upload'].fillna(pd.Timestamp.now())
+        df_view['data_publicacao'] = pd.Series(pd.NaT, index=df_view.index)
+
+    # 3. PREENCHIMENTO DE NULOS MAN TENDO DTYPE DATETIME64
+    agora_bahia = pd.Timestamp.now(tz='America/Bahia')
+    df_view['data_publicacao'] = df_view['data_publicacao'].fillna(df_view['data_upload']).fillna(agora_bahia)
 
     df_view['estado'] = df_view.apply(lambda r: inferir_estado(cli_sel, r['veiculo_nome'], r['localizacao']), axis=1)
 
     # ============================================================
-    # RESTANTE DOS FILTROS, TAMBÉM NA BARRA LATERAL
+    # FILTROS NA BARRA LATERAL
     # ============================================================
     with st.sidebar:
         st.markdown("<span class='terminal-label'>Filtros</span>", unsafe_allow_html=True)
@@ -486,7 +494,6 @@ if not df_view.empty:
     # ============================================================
     st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
 
-    # --- CONTROLE DE EXIBIÇÃO DO AVISO ---
     if cli_sel != "Todos os Clientes":
         ultima_att = df_view['data_upload'].max()
         if pd.notna(ultima_att):
