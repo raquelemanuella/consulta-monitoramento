@@ -594,7 +594,7 @@ if not df_view.empty:
     aud_total = safe_float(df_view_final['audiencia'].apply(limpar_valor_numerico).sum())
     val_total = safe_float(df_view_final.apply(lambda r: extrair_valoracao_real(r['valoracao'], r['sentimento']), axis=1).sum())
 
-    aba_resumo, aba_tabela = st.tabs(["📊 Resumo", "📋 Tabela Completa"])
+    aba_resumo, aba_ia, aba_tabela = st.tabs(["📊 Resumo", "🧠 Resumo Executivo", "📋 Tabela Completa"])
 
     with aba_resumo:
         col_cards, col_graficos = st.columns([1, 1.2])
@@ -746,7 +746,7 @@ if not df_view.empty:
                 else:
                     st.info("Nenhum veículo Tier 1 / IDM encontrado nesse período com os filtros atuais.")
 
-        st.markdown("<br>", unsafe_allow_html=True)
+    with aba_ia:
         if total_materias > 0:
             with st.container(border=True):
                 st.markdown("<span class='terminal-label'>IA</span><h4>🧠 Resumo Executivo</h4>", unsafe_allow_html=True)
@@ -788,6 +788,8 @@ Não invente nenhum número fora dos listados acima. Tom profissional, para um c
                     st.markdown(st.session_state[f'resumo_executivo_{chave_atual}'])
                 else:
                     st.caption("Clique no botão para gerar um resumo automático com base nos dados filtrados.")
+        else:
+            st.info("Sem dados suficientes para gerar um resumo executivo.")
 
     with aba_tabela:
         # ============================================================
