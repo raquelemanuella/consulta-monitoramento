@@ -101,6 +101,13 @@ st.markdown("""
         line-height: 1.2 !important;
     }
 
+    [data-testid="stMetricDelta"] {
+        display: flex !important;
+        width: 100% !important;
+        justify-content: center !important;
+        font-family: 'Inter', sans-serif !important;
+    }
+
     .stTextInput div[data-baseweb="input"], .stSelectbox div[data-baseweb="select"] {
         background-color: #FFFFFF !important;
         border: 1.5px solid #E4E2F7 !important;
@@ -274,6 +281,21 @@ def formatar_moeda(valor):
         return f"{sinal}R$ {formatar_numero_br(v_abs/1_000_000, 1)} mi"
     return f"{sinal}R$ {formatar_numero_br(v_abs, 2)}"
 
+def calcular_delta(atual, anterior, texto_base, is_percent=False):
+    atual = safe_float(atual)
+    anterior = safe_float(anterior)
+    if anterior == 0:
+        if atual == 0: return None
+        return f"+100% {texto_base}" if not is_percent else f"+{atual:.1f} p.p. {texto_base}"
+    if is_percent:
+        diff = atual - anterior
+        prefix = "+" if diff > 0 else ""
+        return f"{prefix}{diff:.1f} p.p. {texto_base}"
+    else:
+        diff = ((atual - anterior) / abs(anterior)) * 100
+        prefix = "+" if diff > 0 else ""
+        return f"{prefix}{diff:.1f}% {texto_base}"
+
 def padronizar_canal(c_str):
     if pd.isna(c_str): return "Portal de Notícias"
     c_str = str(c_str).strip()
@@ -421,15 +443,15 @@ with st.spinner("Carregando dados do banco..."):
 
 if not df_view.empty:
     df_view['canal'] = df_view['canal'].apply(padronizar_canal)
-    
+
     # 1. TRATAMENTO DE FUSO HORÁRIO EM DATA_UPLOAD
     df_view['data_upload'] = pd.to_datetime(df_view.get('data_upload', pd.Series()), errors='coerce')
     if df_view['data_upload'].dt.tz is None:
         df_view['data_upload'] = df_view['data_upload'].dt.tz_localize('UTC').dt.tz_convert('America/Bahia')
     else:
         df_view['data_upload'] = df_view['data_upload'].dt.tz_convert('America/Bahia')
-    
-    # 2. TRATAMENTO DE FUSO HORÁRIO EM DATA_PUBLICACAO (MESMO PADRÃO TZ-AWARE)
+
+    # 2. TRATAMENTO DE FUSO HORÁRIO EM DATA_PUBLICACAO
     if 'data_publicacao' in df_view.columns:
         s_pub = pd.to_datetime(df_view['data_publicacao'], errors='coerce')
         if s_pub.dt.tz is None:
@@ -439,7 +461,7 @@ if not df_view.empty:
     else:
         df_view['data_publicacao'] = pd.Series(pd.NaT, index=df_view.index)
 
-    # 3. PREENCHIMENTO DE NULOS MAN TENDO DTYPE DATETIME64
+    # 3. PREENCHIMENTO DE NULOS MANTENDO DTYPE DATETIME64
     agora_bahia = pd.Timestamp.now(tz='America/Bahia')
     df_view['data_publicacao'] = df_view['data_publicacao'].fillna(df_view['data_upload']).fillna(agora_bahia)
 
@@ -490,6 +512,37 @@ if not df_view.empty:
             st.rerun()
 
     # ============================================================
+    # CÁLCULO DO PERÍODO ANTERIOR (para os deltas de comparação)
+    # ============================================================
+    delta_dias_periodo = (data_fim - data_inicio).days + 1
+    data_fim_anterior = data_inicio - timedelta(days=1)
+    data_inicio_anterior = data_fim_anterior - timedelta(days=delta_dias_periodo - 1)
+
+    mask_anterior = (df_view['data_publicacao'].dt.date >= data_inicio_anterior) & (df_view['data_publicacao'].dt.date <= data_fim_anterior)
+    df_view_anterior = df_view[mask_anterior]
+    if filtro_estado:
+        df_view_anterior = df_view_anterior[df_view_anterior['estado'].isin(filtro_estado)]
+    if filtro_midia:
+        df_view_anterior = df_view_anterior[df_view_anterior['canal'].isin(filtro_midia)]
+    if busca_titulo:
+        df_view_anterior = df_view_anterior[df_view_anterior['titulo'].astype(str).str.contains(busca_titulo, case=False, na=False)]
+
+    if delta_dias_periodo == 7:
+        texto_base_delta = "vs. sem. ant."
+    elif 28 <= delta_dias_periodo <= 31:
+        texto_base_delta = "vs. mês ant."
+    else:
+        texto_base_delta = f"vs. {delta_dias_periodo}d ant."
+
+    total_materias_ant = len(df_view_anterior)
+    if total_materias_ant > 0:
+        aud_total_ant = safe_float(df_view_anterior['audiencia'].apply(limpar_valor_numerico).sum())
+        val_total_ant = safe_float(df_view_anterior.apply(lambda r: extrair_valoracao_real(r['valoracao'], r['sentimento']), axis=1).sum())
+    else:
+        aud_total_ant = 0.0
+        val_total_ant = 0.0
+
+    # ============================================================
     # ÁREA PRINCIPAL: TÍTULO + AVISO + ABAS DE RESULTADOS
     # ============================================================
     st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
@@ -510,11 +563,20 @@ if not df_view.empty:
 
         with col_cards:
             with st.container(border=True):
-                st.metric("📰 Total de Matérias", formatar_numero_br(total_materias, 0))
-                
+                st.metric(
+                    "📰 Total de Matérias", formatar_numero_br(total_materias, 0),
+                    delta=calcular_delta(total_materias, total_materias_ant, texto_base_delta)
+                )
+
                 k1, k2 = st.columns(2)
-                k1.metric("📡 Audiência Estimada", formatar_audiencia(aud_total))
-                k2.metric("💰 Valor Editorial", formatar_moeda(val_total))
+                k1.metric(
+                    "📡 Audiência Estimada", formatar_audiencia(aud_total),
+                    delta=calcular_delta(aud_total, aud_total_ant, texto_base_delta)
+                )
+                k2.metric(
+                    "💰 Valor Editorial", formatar_moeda(val_total),
+                    delta=calcular_delta(val_total, val_total_ant, texto_base_delta)
+                )
                 st.markdown("---")
 
                 st.markdown("<span class='terminal-label'>📡 Distribution</span>", unsafe_allow_html=True)
@@ -576,8 +638,6 @@ if not df_view.empty:
             with st.container(border=True):
                 st.markdown("<span class='terminal-label'>Trend</span><h4>Evolução de Matérias no Tempo</h4>", unsafe_allow_html=True)
 
-                delta_dias_periodo = (data_fim - data_inicio).days if data_inicio and data_fim else 0
-                
                 if delta_dias_periodo <= 60:
                     freq_agrupamento = 'D'
                     formato_label = '%d/%m'
@@ -595,24 +655,23 @@ if not df_view.empty:
                 teto_eixo_y = max_materias * 1.20 if max_materias > 0 else 10
 
                 fig_evolucao = px.line(df_evolucao, x='Rótulo', y='Quantidade', text='Quantidade', markers=True)
-                
+
                 fig_evolucao.update_traces(
-                    line_color='#6C5CE7', 
-                    line_shape='spline', 
+                    line_color='#6C5CE7',
+                    line_shape='spline',
                     marker=dict(color='#6C5CE7', size=7),
                     textposition='top center',
                     textfont=dict(size=13, color='#2D2A4A', family='Inter')
                 )
-                
+
                 fig_evolucao.update_layout(
                     xaxis_title="", yaxis_title="Matérias",
                     plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                     margin=dict(t=30, b=10, l=0, r=0), height=320
                 )
                 fig_evolucao.update_xaxes(showgrid=False)
-                
                 fig_evolucao.update_yaxes(showgrid=True, gridcolor='#ECEBFA', range=[0, teto_eixo_y])
-                
+
                 st.plotly_chart(fig_evolucao, use_container_width=True)
 
     with aba_tabela:
