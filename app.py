@@ -3,6 +3,7 @@ import pandas as pd
 from supabase import create_client, Client
 import io
 import re
+import requests
 from datetime import datetime, timedelta
 import calendar
 import plotly.express as px
@@ -593,25 +594,8 @@ if not df_view.empty:
                     "💰 Valor Editorial", formatar_moeda(val_total),
                     delta=calcular_delta(val_total, val_total_ant, texto_base_delta)
                 )
-                
-                # --- CLASSIFICAÇÃO MOVIDA PARA CIMA ---
                 st.markdown("---")
-                st.markdown("<span class='terminal-label'>🏷️ Classificação</span>", unsafe_allow_html=True)
-                if cli_sel == "Ambev":
-                    qtd_idm = len(df_view_final[df_view_final['check_idm'].astype(str).str.strip() == "IDM"])
-                    qtd_sem_idm = total_materias - qtd_idm
-                    c_idm1, c_idm2 = st.columns(2)
-                    c_idm1.metric("IDM", formatar_numero_br(qtd_idm, 0))
-                    c_idm2.metric("Não idm", formatar_numero_br(qtd_sem_idm, 0))
-                elif "tier" in df_view_final.columns:
-                    qtd_tier1 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 1"])
-                    qtd_tier2 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 2"])
-                    c_t1, c_t2 = st.columns(2)
-                    c_t1.metric("Tier 1", formatar_numero_br(qtd_tier1, 0))
-                    c_t2.metric("Outros", formatar_numero_br(qtd_tier2, 0))
-                # -------------------------------------
 
-                st.markdown("---")
                 st.markdown("<span class='terminal-label'>📡 Distribution</span>", unsafe_allow_html=True)
                 contagem = df_view_final['canal'].value_counts().to_dict()
                 canais_presentes = {}
@@ -628,6 +612,21 @@ if not df_view.empty:
                     for idx, (c_nome, c_qtd) in enumerate(linha):
                         linha_cols[idx].metric(c_nome, formatar_numero_br(c_qtd, 0))
 
+                st.markdown("---")
+                st.markdown("<span class='terminal-label'>🏷️ Classificação</span>", unsafe_allow_html=True)
+                if cli_sel == "Ambev":
+                    qtd_idm = len(df_view_final[df_view_final['check_idm'].astype(str).str.strip() == "IDM"])
+                    qtd_sem_idm = total_materias - qtd_idm
+                    c_idm1, c_idm2 = st.columns(2)
+                    c_idm1.metric("IDM", formatar_numero_br(qtd_idm, 0))
+                    c_idm2.metric("Não idm", formatar_numero_br(qtd_sem_idm, 0))
+                elif "tier" in df_view_final.columns:
+                    qtd_tier1 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 1"])
+                    qtd_tier2 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 2"])
+                    c_t1, c_t2 = st.columns(2)
+                    c_t1.metric("Tier 1", formatar_numero_br(qtd_tier1, 0))
+                    c_t2.metric("Outros", formatar_numero_br(qtd_tier2, 0))
+
         with col_graficos:
             if total_materias > 0:
                 with st.container(border=True):
@@ -636,57 +635,21 @@ if not df_view.empty:
                     df_pizza = df_canal_padrao.value_counts().reset_index()
                     df_pizza.columns = ['Canal', 'Quantidade']
                     
-                    total_geral = df_pizza['Quantidade'].sum()
-                    if total_geral > 0:
-                        df_pizza['Percentual'] = (df_pizza['Quantidade'] / total_geral) * 100
-                        if len(df_pizza) > 4:
-                            limite_corte = 2.0
-                            mask_pequenos = df_pizza['Percentual'] < limite_corte
-                            if mask_pequenos.sum() > 1:
-                                soma_outros = df_pizza.loc[mask_pequenos, 'Quantidade'].sum()
-                                df_pizza = df_pizza[~mask_pequenos]
-                                df_outros = pd.DataFrame([{'Canal': 'Outros', 'Quantidade': soma_outros, 'Percentual': (soma_outros/total_geral)*100}])
-                                df_pizza = pd.concat([df_pizza, df_outros], ignore_index=True)
-
                     mapa_cores_midia = {
                         'Facebook': '#1877F2', 'Instagram': '#E1306C', 'X / Twitter': '#000000',
                         'Linkedin': '#0A66C2', 'Youtube': '#FF0000', 'Tiktok': '#000000',
                         'Portal de Notícias': '#6C5CE7', 'Impresso': '#A29BFE',
-                        'TV': '#00CEC9', 'Rádio': '#FDCB6E', 'Podcast': '#E17055', 'Outros': '#B2BEC3'
+                        'TV': '#00CEC9', 'Rádio': '#FDCB6E', 'Podcast': '#E17055'
                     }
                     
-                    fig_pizza = px.pie(
-                        df_pizza, 
-                        names='Canal', 
-                        values='Quantidade', 
-                        color='Canal', 
-                        color_discrete_map=mapa_cores_midia,
-                        hole=0.4
-                    )
+                    fig_pizza = px.pie(df_pizza, names='Canal', values='Quantidade', color='Canal', color_discrete_map=mapa_cores_midia)
+                    fig_pizza.update_traces(textposition='auto', textinfo='percent', hoverinfo='label+percent')
                     
-                    fig_pizza.update_traces(
-                        textposition='inside', 
-                        textinfo='percent+label', 
-                        hoverinfo='label+percent+value',
-                        insidetextfont=dict(color='#FFFFFF', family='Inter', size=12)
-                    )
-                    
-                    fig_pizza.update_layout(
-                        margin=dict(t=10, b=10, l=0, r=0), 
-                        paper_bgcolor="rgba(0,0,0,0)", 
-                        height=320,
-                        legend=dict(
-                            orientation="h",
-                            yanchor="bottom",
-                            y=-0.3,
-                            xanchor="center",
-                            x=0.5
-                        )
-                    )
+                    fig_pizza.update_layout(margin=dict(t=10, b=10, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", height=280)
                     st.plotly_chart(fig_pizza, use_container_width=True)
 
                 with st.container(border=True):
-                    st.markdown("<span class='terminal-label'>Geomapping</span><h4>⚠ Publicações por Estado</h4>", unsafe_allow_html=True)
+                    st.markdown("<span class='terminal-label'>Geomapping</span><h4>⚠️️ Publicações por Estado</h4>", unsafe_allow_html=True)
                     df_barras = df_view_final['estado'].value_counts().reset_index()
                     df_barras.columns = ['Estado', 'Quantidade']
                     fig_barras = px.bar(df_barras, x='Estado', y='Quantidade', text_auto=True)
@@ -823,12 +786,14 @@ if not df_view.empty:
             }
         )
         
+        # --- BOTÃO DE ATUALIZAR REPOSICIONADO PARA O CANTO INFERIOR ---
         st.markdown("<br>", unsafe_allow_html=True)
         col_espaco, col_btn_atualizar = st.columns([3, 1])
         with col_btn_atualizar:
             if st.button("🔄 Atualizar Dados do Banco", use_container_width=True, key="btn_atualizar_tabela"):
                 carregar_dados_banco.clear()
                 st.rerun()
+        # -------------------------------------------------------------
 else:
     with st.sidebar:
         st.markdown("---")
