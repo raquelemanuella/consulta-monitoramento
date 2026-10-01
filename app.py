@@ -262,33 +262,31 @@ def extrair_valoracao_real(valor_str, sentimento_str):
         return -abs(v)
     return abs(v)
 
-def formatar_numero_br(valor, casas_decimais=0, remover_zeros=False):
-    # Se o parâmetro remover_zeros estiver ativo e o número for redondo (ex: 15.0)
-    if remover_zeros and float(valor).is_integer():
-        casas_decimais = 0
-        
+def formatar_numero_br(valor, casas_decimais=0):
     numero_formatado = f"{valor:,.{casas_decimais}f}"
     return numero_formatado.replace(",", "X").replace(".", ",").replace("X", ".")
 
 def formatar_audiencia(valor):
     valor = safe_float(valor)
+    # Verifica e formata bilhões (bi), milhões (mi) e milhares (mil)
     if valor >= 1_000_000_000:
-        return f"{formatar_numero_br(valor / 1_000_000_000, 1, remover_zeros=True)} bi"
+        return f"{formatar_numero_br(valor/1_000_000_000, 1)} bi"
     if valor >= 1_000_000: 
-        return f"{formatar_numero_br(valor / 1_000_000, 1, remover_zeros=True)} mi"
+        return f"{formatar_numero_br(valor/1_000_000, 1)} mi"
     if valor >= 1_000: 
-        return f"{formatar_numero_br(valor / 1_000, 1, remover_zeros=True)} mil"
+        return f"{formatar_numero_br(valor/1_000, 1)} mil"
     return formatar_numero_br(valor, 0)
 
 def formatar_moeda(valor):
     valor = safe_float(valor)
     sinal = "-" if valor < 0 else ""
     v_abs = abs(valor)
+    # Verifica e formata bilhões (bi), milhões (mi) em reais
     if v_abs >= 1_000_000_000:
-        return f"{sinal}R$ {formatar_numero_br(v_abs / 1_000_000_000, 1, remover_zeros=True)} bi"
+        return f"{sinal}R$ {formatar_numero_br(v_abs/1_000_000_000, 1)} bi"
     if v_abs >= 1_000_000:
-        return f"{sinal}R$ {formatar_numero_br(v_abs / 1_000_000, 1, remover_zeros=True)} mi"
-    return f"{sinal}R$ {formatar_numero_br(v_abs, 2, remover_zeros=True)}"
+        return f"{sinal}R$ {formatar_numero_br(v_abs/1_000_000, 1)} mi"
+    return f"{sinal}R$ {formatar_numero_br(v_abs, 2)}"
 
 def calcular_delta(atual, anterior, texto_base, is_percent=False):
     atual = safe_float(atual)
@@ -671,19 +669,18 @@ if not df_view.empty:
                     
                     # Dicionário de cores definindo a identidade visual dos aplicativos
                     mapa_cores_midia = {
-                       mapa_cores_midia = {
-    'Facebook': '#1877F2',
-    'Instagram': '#E1306C',
-    'X / Twitter': '#000000',
-    'Linkedin': '#0A66C2',
-    'Youtube': '#FF0000',
-    'Tiktok': '#EE1D52',
-    'Portal de Notícias': '#6C5CE7',
-    'Impresso': '#A29BFE',
-    'TV': '#00CEC9',
-    'Rádio': '#FDCB6E',
-    'Podcast': '#E17055'
-}
+                        'Facebook': '#1877F2',
+                        'Instagram': '#E1306C',
+                        'X / Twitter': '#000000',
+                        'Linkedin': '#0A66C2',
+                        'Youtube': '#FF0000',
+                        'Tiktok': '#000000',
+                        'Portal de Notícias': '#6C5CE7',
+                        'Impresso': '#A29BFE',
+                        'TV': '#00CEC9',
+                        'Rádio': '#FDCB6E',
+                        'Podcast': '#E17055'
+                    }
                     
                     fig_pizza = px.pie(df_pizza, names='Canal', values='Quantidade', color='Canal', color_discrete_map=mapa_cores_midia)
                     fig_pizza.update_traces(textposition='inside', textinfo='percent', hoverinfo='label+percent')
