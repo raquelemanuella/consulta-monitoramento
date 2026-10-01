@@ -671,18 +671,19 @@ if not df_view.empty:
                     
                     # Dicionário de cores definindo a identidade visual dos aplicativos
                     mapa_cores_midia = {
-                        'Facebook': '#1877F2',
-                        'Instagram': '#E1306C',
-                        'X / Twitter': '#000000',
-                        'Linkedin': '#0A66C2',
-                        'Youtube': '#FF0000',
-                        'Tiktok': '#000000',
-                        'Portal de Notícias': '#6C5CE7',
-                        'Impresso': '#A29BFE',
-                        'TV': '#00CEC9',
-                        'Rádio': '#FDCB6E',
-                        'Podcast': '#E17055'
-                    }
+                       mapa_cores_midia = {
+    'Facebook': '#1877F2',
+    'Instagram': '#E1306C',
+    'X / Twitter': '#000000',
+    'Linkedin': '#0A66C2',
+    'Youtube': '#FF0000',
+    'Tiktok': '#EE1D52',
+    'Portal de Notícias': '#6C5CE7',
+    'Impresso': '#A29BFE',
+    'TV': '#00CEC9',
+    'Rádio': '#FDCB6E',
+    'Podcast': '#E17055'
+}
                     
                     fig_pizza = px.pie(df_pizza, names='Canal', values='Quantidade', color='Canal', color_discrete_map=mapa_cores_midia)
                     fig_pizza.update_traces(textposition='inside', textinfo='percent', hoverinfo='label+percent')
