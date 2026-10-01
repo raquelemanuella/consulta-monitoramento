@@ -674,7 +674,7 @@ if not df_view.empty:
                         'X / Twitter': '#000000',
                         'Linkedin': '#0A66C2',
                         'Youtube': '#FF0000',
-                        'Tiktok': '#000000',
+                        'Tiktok': '#808080',
                         'Portal de Notícias': '#6C5CE7',
                         'Impresso': '#A29BFE',
                         'TV': '#00CEC9',
