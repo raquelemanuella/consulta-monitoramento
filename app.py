@@ -596,6 +596,28 @@ if not df_view.empty:
                 )
                 st.markdown("---")
 
+                # ============================================================
+                # CLASSIFICAÇÃO POSICIONADA ACIMA DE DISTRIBUTION
+                # ============================================================
+                st.markdown("<span class='terminal-label'>🏷️ Classificação</span>", unsafe_allow_html=True)
+                if cli_sel == "Ambev":
+                    qtd_idm = len(df_view_final[df_view_final['check_idm'].astype(str).str.strip() == "IDM"])
+                    qtd_sem_idm = total_materias - qtd_idm
+                    c_idm1, c_idm2 = st.columns(2)
+                    c_idm1.metric("IDM", formatar_numero_br(qtd_idm, 0))
+                    c_idm2.metric("Não idm", formatar_numero_br(qtd_sem_idm, 0))
+                elif "tier" in df_view_final.columns:
+                    qtd_tier1 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 1"])
+                    qtd_tier2 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 2"])
+                    c_t1, c_t2 = st.columns(2)
+                    c_t1.metric("Tier 1", formatar_numero_br(qtd_tier1, 0))
+                    c_t2.metric("Outros", formatar_numero_br(qtd_tier2, 0))
+
+                st.markdown("---")
+
+                # ============================================================
+                # DISTRIBUTION
+                # ============================================================
                 st.markdown("<span class='terminal-label'>📡 Distribution</span>", unsafe_allow_html=True)
                 contagem = df_view_final['canal'].value_counts().to_dict()
                 canais_presentes = {}
@@ -611,21 +633,6 @@ if not df_view.empty:
                     linha_cols = st.columns(n_por_linha)
                     for idx, (c_nome, c_qtd) in enumerate(linha):
                         linha_cols[idx].metric(c_nome, formatar_numero_br(c_qtd, 0))
-
-                st.markdown("---")
-                st.markdown("<span class='terminal-label'>🏷️ Classificação</span>", unsafe_allow_html=True)
-                if cli_sel == "Ambev":
-                    qtd_idm = len(df_view_final[df_view_final['check_idm'].astype(str).str.strip() == "IDM"])
-                    qtd_sem_idm = total_materias - qtd_idm
-                    c_idm1, c_idm2 = st.columns(2)
-                    c_idm1.metric("IDM", formatar_numero_br(qtd_idm, 0))
-                    c_idm2.metric("Não idm", formatar_numero_br(qtd_sem_idm, 0))
-                elif "tier" in df_view_final.columns:
-                    qtd_tier1 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 1"])
-                    qtd_tier2 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 2"])
-                    c_t1, c_t2 = st.columns(2)
-                    c_t1.metric("Tier 1", formatar_numero_br(qtd_tier1, 0))
-                    c_t2.metric("Outros", formatar_numero_br(qtd_tier2, 0))
 
         with col_graficos:
             if total_materias > 0:
@@ -649,7 +656,7 @@ if not df_view.empty:
                     st.plotly_chart(fig_pizza, use_container_width=True)
 
                 with st.container(border=True):
-                    st.markdown("<span class='terminal-label'>Geomapping</span><h4>⚠️️ Publicações por Estado</h4>", unsafe_allow_html=True)
+                    st.markdown("<span class='terminal-label'>Geomapping</span><h4>⚠ Publicações por Estado</h4>", unsafe_allow_html=True)
                     df_barras = df_view_final['estado'].value_counts().reset_index()
                     df_barras.columns = ['Estado', 'Quantidade']
                     fig_barras = px.bar(df_barras, x='Estado', y='Quantidade', text_auto=True)
