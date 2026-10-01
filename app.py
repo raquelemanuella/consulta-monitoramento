@@ -668,6 +668,38 @@ if not df_view.empty:
                     fig_barras.update_traces(marker_color='#6C5CE7')
                     fig_barras.update_layout(xaxis_title="", yaxis_title="Publicações", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", margin=dict(t=10, b=10, l=0, r=0), height=280)
                     st.plotly_chart(fig_barras, use_container_width=True)
+
+                with st.container(border=True):
+                    st.markdown("<span class='terminal-label'>Ranking</span><h4>Top Veículos (Tier 1 / IDM)</h4>", unsafe_allow_html=True)
+
+                    if cli_sel == "Ambev":
+                        mask_top = df_view_final['check_idm'].astype(str).str.strip() == "IDM"
+                    elif cli_sel == "Todos os Clientes":
+                        mask_top = (
+                            ((df_view_final['cliente'] == "Ambev") & (df_view_final['check_idm'].astype(str).str.strip() == "IDM"))
+                            | ((df_view_final['cliente'] != "Ambev") & (df_view_final['tier'].astype(str).str.strip() == "Tier 1"))
+                        )
+                    else:
+                        mask_top = df_view_final['tier'].astype(str).str.strip() == "Tier 1"
+
+                    df_top_veiculos = df_view_final[mask_top]
+
+                    if not df_top_veiculos.empty:
+                        ranking = df_top_veiculos['veiculo_nome'].value_counts().reset_index()
+                        ranking.columns = ['Veículo', 'Menções']
+                        ranking = ranking.head(10).sort_values(by='Menções', ascending=True)
+
+                        fig_ranking = px.bar(ranking, x='Menções', y='Veículo', orientation='h', text_auto=True)
+                        fig_ranking.update_traces(marker_color='#6C5CE7')
+                        fig_ranking.update_layout(
+                            xaxis_title="Menções", yaxis_title="",
+                            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                            margin=dict(t=10, b=10, l=0, r=0), height=350
+                        )
+                        fig_ranking.update_xaxes(showgrid=True, gridcolor='#ECEBFA')
+                        st.plotly_chart(fig_ranking, use_container_width=True)
+                    else:
+                        st.info("Nenhum veículo Tier 1 / IDM encontrado nesse período com os filtros atuais.")
             else:
                 st.info("Sem dados suficientes para gerar gráficos.")
 
@@ -711,40 +743,6 @@ if not df_view.empty:
                 fig_evolucao.update_yaxes(showgrid=True, gridcolor='#ECEBFA', range=[0, teto_eixo_y])
 
                 st.plotly_chart(fig_evolucao, use_container_width=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        if total_materias > 0:
-            with st.container(border=True):
-                st.markdown("<span class='terminal-label'>Ranking</span><h4>Top Veículos (Tier 1 / IDM)</h4>", unsafe_allow_html=True)
-
-                if cli_sel == "Ambev":
-                    mask_top = df_view_final['check_idm'].astype(str).str.strip() == "IDM"
-                elif cli_sel == "Todos os Clientes":
-                    mask_top = (
-                        ((df_view_final['cliente'] == "Ambev") & (df_view_final['check_idm'].astype(str).str.strip() == "IDM"))
-                        | ((df_view_final['cliente'] != "Ambev") & (df_view_final['tier'].astype(str).str.strip() == "Tier 1"))
-                    )
-                else:
-                    mask_top = df_view_final['tier'].astype(str).str.strip() == "Tier 1"
-
-                df_top_veiculos = df_view_final[mask_top]
-
-                if not df_top_veiculos.empty:
-                    ranking = df_top_veiculos['veiculo_nome'].value_counts().reset_index()
-                    ranking.columns = ['Veículo', 'Menções']
-                    ranking = ranking.head(10).sort_values(by='Menções', ascending=True)
-
-                    fig_ranking = px.bar(ranking, x='Menções', y='Veículo', orientation='h', text_auto=True)
-                    fig_ranking.update_traces(marker_color='#6C5CE7')
-                    fig_ranking.update_layout(
-                        xaxis_title="Menções", yaxis_title="",
-                        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                        margin=dict(t=10, b=10, l=0, r=0), height=350
-                    )
-                    fig_ranking.update_xaxes(showgrid=True, gridcolor='#ECEBFA')
-                    st.plotly_chart(fig_ranking, use_container_width=True)
-                else:
-                    st.info("Nenhum veículo Tier 1 / IDM encontrado nesse período com os filtros atuais.")
 
     with aba_ia:
         if total_materias > 0:
