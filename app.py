@@ -644,13 +644,15 @@ if not df_view.empty:
                     
                     mapa_cores_midia = {
                         'Facebook': '#1877F2', 'Instagram': '#E1306C', 'X / Twitter': '#000000',
-                        'Linkedin': '#0A66C2', 'Youtube': '#FF0000', 'Tiktok': '#000000',
+                        'Linkedin': '#0A66C2', 'Youtube': '#FF0000', 'Tiktok': '#808080',
                         'Portal de Notícias': '#6C5CE7', 'Impresso': '#A29BFE',
                         'TV': '#00CEC9', 'Rádio': '#FDCB6E', 'Podcast': '#E17055'
                     }
                     
                     fig_pizza = px.pie(df_pizza, names='Canal', values='Quantidade', color='Canal', color_discrete_map=mapa_cores_midia)
-                    fig_pizza.update_traces(textposition='auto', textinfo='percent', hoverinfo='label+percent')
+                    
+                    # Alterado de 'auto' para 'inside' para que os percentuais fiquem dentro das fatias sem puxar linhas externas
+                    fig_pizza.update_traces(textposition='inside', textinfo='percent', hoverinfo='label+percent')
                     
                     fig_pizza.update_layout(margin=dict(t=10, b=10, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", height=280)
                     st.plotly_chart(fig_pizza, use_container_width=True)
