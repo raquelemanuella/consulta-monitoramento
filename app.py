@@ -5,7 +5,7 @@ import io
 import re
 import requests
 from datetime import datetime, timedelta
-import calendar # Importado para ajudar a calcular os dias do mês
+import calendar
 import plotly.express as px
 
 from dicionario_tiers import DICIONARIO_VEICULOS
@@ -431,10 +431,8 @@ with st.sidebar:
     st.markdown("---")
 
     cli_sel = st.selectbox("Cliente:", ["Todos os Clientes"] + CLIENTES)
-
-    if st.button("🔄 Atualizar agora", use_container_width=True):
-        carregar_dados_banco.clear()
-        st.rerun()
+    
+    # BOTÃO DE ATUALIZAR REMOVIDO DAQUI
 
 # ============================================================
 # CARREGAMENTO E TRATAMENTO DOS DADOS
@@ -470,7 +468,6 @@ if not df_view.empty:
     with st.sidebar:
         st.markdown("<span class='terminal-label'>Filtros</span>", unsafe_allow_html=True)
 
-        # NOVA LÓGICA DE FILTRO DE DATA
         tipo_filtro_data = st.radio("Selecione o período por:", ["Mês Fechado", "Período Personalizado"], horizontal=True)
         
         if tipo_filtro_data == "Mês Fechado":
@@ -488,7 +485,6 @@ if not df_view.empty:
             ano_selecionado = col_a.selectbox("Ano:", [2024, 2025, 2026, 2027], index=[2024, 2025, 2026, 2027].index(ano_atual))
             
             num_mes = meses_opcoes[mes_selecionado]
-            # Descobre qual é o último dia do mês selecionado
             _, ultimo_dia = calendar.monthrange(ano_selecionado, num_mes)
             
             data_inicio = datetime(ano_selecionado, num_mes, 1).date()
@@ -502,7 +498,6 @@ if not df_view.empty:
             data_inicio = st.date_input("Data Inicial:", value=padrao_inicio, format="DD/MM/YYYY", key=f"di_{cli_sel}")
             data_fim = st.date_input("Data Final:", value=padrao_fim, format="DD/MM/YYYY", key=f"df_{cli_sel}")
 
-        # Aplica o filtro de data
         if data_inicio and data_fim:
             mask_data = (df_view['data_publicacao'].dt.date >= data_inicio) & (df_view['data_publicacao'].dt.date <= data_fim)
             df_view_filtrado_data = df_view[mask_data]
@@ -580,7 +575,6 @@ if not df_view.empty:
     aud_total = safe_float(df_view_final['audiencia'].apply(limpar_valor_numerico).sum())
     val_total = safe_float(df_view_final.apply(lambda r: extrair_valoracao_real(r['valoracao'], r['sentimento']), axis=1).sum())
 
-    # Aba de IA removida! Ficaram apenas o Resumo visual e a Tabela.
     aba_resumo, aba_tabela = st.tabs(["📊 Resumo", "📋 Tabela Completa"])
 
     with aba_resumo:
@@ -645,21 +639,18 @@ if not df_view.empty:
                     
                     mapa_cores_midia = {
                         'Facebook': '#1877F2', 'Instagram': '#E1306C', 'X / Twitter': '#000000',
-                        'Linkedin': '#0A66C2', 'Youtube': '#FF0000', 'Tiktok': '#808080',
+                        'Linkedin': '#0A66C2', 'Youtube': '#FF0000', 'Tiktok': '#000000',
                         'Portal de Notícias': '#6C5CE7', 'Impresso': '#A29BFE',
                         'TV': '#00CEC9', 'Rádio': '#FDCB6E', 'Podcast': '#E17055'
                     }
                     
                     fig_pizza = px.pie(df_pizza, names='Canal', values='Quantidade', color='Canal', color_discrete_map=mapa_cores_midia)
-                    
-                    # Alteração: textposition='auto' empurra fatias muito pequenas (como <1%) para fora, criando uma linha de conexão (seta).
                     fig_pizza.update_traces(textposition='auto', textinfo='percent', hoverinfo='label+percent')
                     
                     fig_pizza.update_layout(margin=dict(t=10, b=10, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", height=280)
                     st.plotly_chart(fig_pizza, use_container_width=True)
 
                 with st.container(border=True):
-                    # Alteração: Emoji de Alerta inserido no Gráfico de Estado
                     st.markdown("<span class='terminal-label'>Geomapping</span><h4>⚠️ Publicações por Estado</h4>", unsafe_allow_html=True)
                     df_barras = df_view_final['estado'].value_counts().reset_index()
                     df_barras.columns = ['Estado', 'Quantidade']
@@ -783,6 +774,13 @@ if not df_view.empty:
             st.download_button(label="EXPORTAR EXCEL", data=excel_data, file_name=nome_arq,
                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                use_container_width=True)
+        
+        # --- AQUI ESTÁ O NOVO LOCAL DO BOTÃO DE ATUALIZAR ---
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("🔄 Atualizar Dados do Banco", use_container_width=True, key="btn_atualizar_tabela"):
+            carregar_dados_banco.clear()
+            st.rerun()
+        # ----------------------------------------------------
 
         st.dataframe(
             df_final_preview,
