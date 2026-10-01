@@ -268,6 +268,9 @@ def formatar_numero_br(valor, casas_decimais=0):
 
 def formatar_audiencia(valor):
     valor = safe_float(valor)
+    # Verifica e formata bilhões (bi), milhões (mi) e milhares (mil)
+    if valor >= 1_000_000_000:
+        return f"{formatar_numero_br(valor/1_000_000_000, 1)} bi"
     if valor >= 1_000_000: 
         return f"{formatar_numero_br(valor/1_000_000, 1)} mi"
     if valor >= 1_000: 
@@ -278,6 +281,9 @@ def formatar_moeda(valor):
     valor = safe_float(valor)
     sinal = "-" if valor < 0 else ""
     v_abs = abs(valor)
+    # Verifica e formata bilhões (bi), milhões (mi) em reais
+    if v_abs >= 1_000_000_000:
+        return f"{sinal}R$ {formatar_numero_br(v_abs/1_000_000_000, 1)} bi"
     if v_abs >= 1_000_000:
         return f"{sinal}R$ {formatar_numero_br(v_abs/1_000_000, 1)} mi"
     return f"{sinal}R$ {formatar_numero_br(v_abs, 2)}"
@@ -513,7 +519,9 @@ if not df_view.empty:
 
         ano_vigente = datetime.now().year
         padrao_inicio = datetime(ano_vigente, 1, 1).date()
-        padrao_fim = datetime(ano_vigente, 12, 31).date()
+        # Alterado para puxar a data atual ("hoje")
+        padrao_fim = datetime.now().date()
+        
         data_inicio = st.date_input("Data Inicial:", value=padrao_inicio, format="DD/MM/YYYY", key=f"di_{cli_sel}")
         data_fim = st.date_input("Data Final:", value=padrao_fim, format="DD/MM/YYYY", key=f"df_{cli_sel}")
 
@@ -524,7 +532,8 @@ if not df_view.empty:
             df_view_filtrado_data = df_view
 
         estados_disp = sorted([e for e in df_view_filtrado_data['estado'].unique() if pd.notna(e) and e != ""])
-        filtro_estado = st.multiselect("Filtrar Estado:", estados_disp)
+        # Inserido o aviso visual de "Em Correção" conforme solicitado
+        filtro_estado = st.multiselect("Filtrar Estado: ⚠️ (Em correção)", estados_disp)
 
         midias_disp = sorted([m for m in df_view_filtrado_data['canal'].unique() if pd.notna(m) and m != ""])
         filtro_midia = st.multiselect("Tipo de Mídia:", midias_disp)
@@ -640,13 +649,15 @@ if not df_view.empty:
                     qtd_sem_idm = total_materias - qtd_idm
                     c_idm1, c_idm2 = st.columns(2)
                     c_idm1.metric("IDM", formatar_numero_br(qtd_idm, 0))
-                    c_idm2.metric("Sem IDM", formatar_numero_br(qtd_sem_idm, 0))
+                    # Ajustado de "Sem idm" para "Não idm"
+                    c_idm2.metric("Não idm", formatar_numero_br(qtd_sem_idm, 0))
                 elif "tier" in df_view_final.columns:
                     qtd_tier1 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 1"])
                     qtd_tier2 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 2"])
                     c_t1, c_t2 = st.columns(2)
                     c_t1.metric("Tier 1", formatar_numero_br(qtd_tier1, 0))
-                    c_t2.metric("Tier 2", formatar_numero_br(qtd_tier2, 0))
+                    # Ajustado de "Tier 2" para "Outros"
+                    c_t2.metric("Outros", formatar_numero_br(qtd_tier2, 0))
 
         with col_graficos:
             if total_materias > 0:
@@ -655,7 +666,23 @@ if not df_view.empty:
                     df_canal_padrao = df_view_final['canal'].apply(padronizar_canal)
                     df_pizza = df_canal_padrao.value_counts().reset_index()
                     df_pizza.columns = ['Canal', 'Quantidade']
-                    fig_pizza = px.pie(df_pizza, names='Canal', values='Quantidade')
+                    
+                    # Dicionário de cores definindo a identidade visual dos aplicativos
+                    mapa_cores_midia = {
+                        'Facebook': '#1877F2',
+                        'Instagram': '#E1306C',
+                        'X / Twitter': '#000000',
+                        'Linkedin': '#0A66C2',
+                        'Youtube': '#FF0000',
+                        'Tiktok': '#000000',
+                        'Portal de Notícias': '#6C5CE7',
+                        'Impresso': '#A29BFE',
+                        'TV': '#00CEC9',
+                        'Rádio': '#FDCB6E',
+                        'Podcast': '#E17055'
+                    }
+                    
+                    fig_pizza = px.pie(df_pizza, names='Canal', values='Quantidade', color='Canal', color_discrete_map=mapa_cores_midia)
                     fig_pizza.update_traces(textposition='inside', textinfo='percent', hoverinfo='label+percent')
                     fig_pizza.update_layout(margin=dict(t=10, b=10, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", height=280)
                     st.plotly_chart(fig_pizza, use_container_width=True)
@@ -718,7 +745,8 @@ if not df_view.empty:
                     freq_agrupamento = 'ME'
                     formato_label = '%m/%Y'
 
-                df_evolucao = df_view_final.set_index('data_publicacao').resample(freq_agrupamento).size().reset_index(name='Quantidade')
+                # Correção: Adicionados label='left' e closed='left' para resolver a falha de datas futuras ("05/10")
+                df_evolucao = df_view_final.set_index('data_publicacao').resample(freq_agrupamento, label='left', closed='left').size().reset_index(name='Quantidade')
                 df_evolucao['Rótulo'] = df_evolucao['data_publicacao'].dt.strftime(formato_label)
 
                 max_materias = df_evolucao['Quantidade'].max() if not df_evolucao.empty else 0
