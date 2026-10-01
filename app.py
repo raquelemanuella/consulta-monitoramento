@@ -431,8 +431,6 @@ with st.sidebar:
     st.markdown("---")
 
     cli_sel = st.selectbox("Cliente:", ["Todos os Clientes"] + CLIENTES)
-    
-    # BOTÃO DE ATUALIZAR REMOVIDO DAQUI
 
 # ============================================================
 # CARREGAMENTO E TRATAMENTO DOS DADOS
@@ -651,7 +649,7 @@ if not df_view.empty:
                     st.plotly_chart(fig_pizza, use_container_width=True)
 
                 with st.container(border=True):
-                    st.markdown("<span class='terminal-label'>Geomapping</span><h4>⚠️ Publicações por Estado</h4>", unsafe_allow_html=True)
+                    st.markdown("<span class='terminal-label'>Geomapping</span><h4>⚠️️ Publicações por Estado</h4>", unsafe_allow_html=True)
                     df_barras = df_view_final['estado'].value_counts().reset_index()
                     df_barras.columns = ['Estado', 'Quantidade']
                     fig_barras = px.bar(df_barras, x='Estado', y='Quantidade', text_auto=True)
@@ -774,13 +772,6 @@ if not df_view.empty:
             st.download_button(label="EXPORTAR EXCEL", data=excel_data, file_name=nome_arq,
                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                use_container_width=True)
-        
-        # --- AQUI ESTÁ O NOVO LOCAL DO BOTÃO DE ATUALIZAR ---
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("🔄 Atualizar Dados do Banco", use_container_width=True, key="btn_atualizar_tabela"):
-            carregar_dados_banco.clear()
-            st.rerun()
-        # ----------------------------------------------------
 
         st.dataframe(
             df_final_preview,
@@ -794,6 +785,15 @@ if not df_view.empty:
                 "Link": st.column_config.LinkColumn("Link"),
             }
         )
+        
+        # --- BOTÃO DE ATUALIZAR REPOSICIONADO PARA O CANTO INFERIOR ---
+        st.markdown("<br>", unsafe_allow_html=True)
+        col_espaco, col_btn_atualizar = st.columns([3, 1])
+        with col_btn_atualizar:
+            if st.button("🔄 Atualizar Dados do Banco", use_container_width=True, key="btn_atualizar_tabela"):
+                carregar_dados_banco.clear()
+                st.rerun()
+        # -------------------------------------------------------------
 else:
     with st.sidebar:
         st.markdown("---")
