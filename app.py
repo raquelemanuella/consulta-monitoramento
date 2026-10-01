@@ -649,7 +649,7 @@ if not df_view.empty:
                     st.plotly_chart(fig_pizza, use_container_width=True)
 
                 with st.container(border=True):
-                    st.markdown("<span class='terminal-label'>Geomapping</span><h4>⚠️️ Publicações por Estado</h4>", unsafe_allow_html=True)
+                    st.markdown("<span class='terminal-label'>Geomapping</span><h4>⚠ Publicações por Estado</h4>", unsafe_allow_html=True)
                     df_barras = df_view_final['estado'].value_counts().reset_index()
                     df_barras.columns = ['Estado', 'Quantidade']
                     fig_barras = px.bar(df_barras, x='Estado', y='Quantidade', text_auto=True)
