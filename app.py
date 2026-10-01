@@ -262,31 +262,33 @@ def extrair_valoracao_real(valor_str, sentimento_str):
         return -abs(v)
     return abs(v)
 
-def formatar_numero_br(valor, casas_decimais=0):
+def formatar_numero_br(valor, casas_decimais=0, remover_zeros=False):
+    # Se o parâmetro remover_zeros estiver ativo e o número for redondo (ex: 15.0)
+    if remover_zeros and float(valor).is_integer():
+        casas_decimais = 0
+        
     numero_formatado = f"{valor:,.{casas_decimais}f}"
     return numero_formatado.replace(",", "X").replace(".", ",").replace("X", ".")
 
 def formatar_audiencia(valor):
     valor = safe_float(valor)
-    # Verifica e formata bilhões (bi), milhões (mi) e milhares (mil)
     if valor >= 1_000_000_000:
-        return f"{formatar_numero_br(valor/1_000_000_000, 1)} bi"
+        return f"{formatar_numero_br(valor / 1_000_000_000, 1, remover_zeros=True)} bi"
     if valor >= 1_000_000: 
-        return f"{formatar_numero_br(valor/1_000_000, 1)} mi"
+        return f"{formatar_numero_br(valor / 1_000_000, 1, remover_zeros=True)} mi"
     if valor >= 1_000: 
-        return f"{formatar_numero_br(valor/1_000, 1)} mil"
+        return f"{formatar_numero_br(valor / 1_000, 1, remover_zeros=True)} mil"
     return formatar_numero_br(valor, 0)
 
 def formatar_moeda(valor):
     valor = safe_float(valor)
     sinal = "-" if valor < 0 else ""
     v_abs = abs(valor)
-    # Verifica e formata bilhões (bi), milhões (mi) em reais
     if v_abs >= 1_000_000_000:
-        return f"{sinal}R$ {formatar_numero_br(v_abs/1_000_000_000, 1)} bi"
+        return f"{sinal}R$ {formatar_numero_br(v_abs / 1_000_000_000, 1, remover_zeros=True)} bi"
     if v_abs >= 1_000_000:
-        return f"{sinal}R$ {formatar_numero_br(v_abs/1_000_000, 1)} mi"
-    return f"{sinal}R$ {formatar_numero_br(v_abs, 2)}"
+        return f"{sinal}R$ {formatar_numero_br(v_abs / 1_000_000, 1, remover_zeros=True)} mi"
+    return f"{sinal}R$ {formatar_numero_br(v_abs, 2, remover_zeros=True)}"
 
 def calcular_delta(atual, anterior, texto_base, is_percent=False):
     atual = safe_float(atual)
