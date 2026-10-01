@@ -5,6 +5,7 @@ import io
 import re
 import requests
 from datetime import datetime, timedelta
+import calendar # Importado para ajudar a calcular os dias do mês
 import plotly.express as px
 
 from dicionario_tiers import DICIONARIO_VEICULOS
@@ -82,11 +83,6 @@ st.markdown("""
         justify-content: center !important;
         text-align: center !important;
         margin-bottom: 8px !important;
-    }
-
-    [data-testid="stMetricLabel"] > div {
-        justify-content: center !important;
-        margin: 0 auto !important;
     }
 
     [data-testid="stMetricValue"] {
@@ -268,7 +264,6 @@ def formatar_numero_br(valor, casas_decimais=0):
 
 def formatar_audiencia(valor):
     valor = safe_float(valor)
-    # Verifica e formata bilhões (bi), milhões (mi) e milhares (mil)
     if valor >= 1_000_000_000:
         return f"{formatar_numero_br(valor/1_000_000_000, 1)} bi"
     if valor >= 1_000_000: 
@@ -281,7 +276,6 @@ def formatar_moeda(valor):
     valor = safe_float(valor)
     sinal = "-" if valor < 0 else ""
     v_abs = abs(valor)
-    # Verifica e formata bilhões (bi), milhões (mi) em reais
     if v_abs >= 1_000_000_000:
         return f"{sinal}R$ {formatar_numero_br(v_abs/1_000_000_000, 1)} bi"
     if v_abs >= 1_000_000:
@@ -358,43 +352,6 @@ def inferir_estado(cliente, veiculo, localizacao):
         if "brasil" in loc: return "Nacional"
         return "Internacional"
     return "Nacional"
-
-def gerar_resumo_executivo(prompt_dados):
-    try:
-        api_key = st.secrets["OPENROUTER_API_KEY"]
-    except Exception:
-        return None, "Chave da API não configurada nos Secrets (OPENROUTER_API_KEY)."
-
-    try:
-        resposta = requests.post(
-            url="https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "openrouter/free",
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": (
-                            "Você é um analista de monitoramento de mídia de uma agência de comunicação. "
-                            "Escreva resumos executivos curtos (3 a 4 frases), diretos e profissionais, em "
-                            "português do Brasil, usando apenas os dados fornecidos. Nunca invente números."
-                        ),
-                    },
-                    {"role": "user", "content": prompt_dados},
-                ],
-                "temperature": 0.4,
-            },
-            timeout=30,
-        )
-        resposta.raise_for_status()
-        dados_resp = resposta.json()
-        texto = dados_resp["choices"][0]["message"]["content"].strip()
-        return texto, None
-    except Exception as e:
-        return None, f"Não foi possível gerar o resumo agora. Detalhe: {e}"
 
 def converter_df_para_excel(df):
     output = io.BytesIO()
@@ -488,14 +445,12 @@ with st.spinner("Carregando dados do banco..."):
 if not df_view.empty:
     df_view['canal'] = df_view['canal'].apply(padronizar_canal)
 
-    # 1. TRATAMENTO DE FUSO HORÁRIO EM DATA_UPLOAD
     df_view['data_upload'] = pd.to_datetime(df_view.get('data_upload', pd.Series()), errors='coerce')
     if df_view['data_upload'].dt.tz is None:
         df_view['data_upload'] = df_view['data_upload'].dt.tz_localize('UTC').dt.tz_convert('America/Bahia')
     else:
         df_view['data_upload'] = df_view['data_upload'].dt.tz_convert('America/Bahia')
 
-    # 2. TRATAMENTO DE FUSO HORÁRIO EM DATA_PUBLICACAO
     if 'data_publicacao' in df_view.columns:
         s_pub = pd.to_datetime(df_view['data_publicacao'], errors='coerce')
         if s_pub.dt.tz is None:
@@ -505,10 +460,8 @@ if not df_view.empty:
     else:
         df_view['data_publicacao'] = pd.Series(pd.NaT, index=df_view.index)
 
-    # 3. PREENCHIMENTO DE NULOS MANTENDO DTYPE DATETIME64
     agora_bahia = pd.Timestamp.now(tz='America/Bahia')
     df_view['data_publicacao'] = df_view['data_publicacao'].fillna(df_view['data_upload']).fillna(agora_bahia)
-
     df_view['estado'] = df_view.apply(lambda r: inferir_estado(cli_sel, r['veiculo_nome'], r['localizacao']), axis=1)
 
     # ============================================================
@@ -517,14 +470,39 @@ if not df_view.empty:
     with st.sidebar:
         st.markdown("<span class='terminal-label'>Filtros</span>", unsafe_allow_html=True)
 
-        ano_vigente = datetime.now().year
-        padrao_inicio = datetime(ano_vigente, 1, 1).date()
-        # Alterado para puxar a data atual ("hoje")
-        padrao_fim = datetime.now().date()
+        # NOVA LÓGICA DE FILTRO DE DATA
+        tipo_filtro_data = st.radio("Selecione o período por:", ["Mês Fechado", "Período Personalizado"], horizontal=True)
         
-        data_inicio = st.date_input("Data Inicial:", value=padrao_inicio, format="DD/MM/YYYY", key=f"di_{cli_sel}")
-        data_fim = st.date_input("Data Final:", value=padrao_fim, format="DD/MM/YYYY", key=f"df_{cli_sel}")
+        if tipo_filtro_data == "Mês Fechado":
+            col_m, col_a = st.columns(2)
+            meses_opcoes = {
+                "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4,
+                "Maio": 5, "Junho": 6, "Julho": 7, "Agosto": 8,
+                "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
+            }
+            mes_atual = datetime.now().month
+            ano_atual = datetime.now().year
+            
+            nome_mes_atual = list(meses_opcoes.keys())[mes_atual - 1]
+            mes_selecionado = col_m.selectbox("Mês:", list(meses_opcoes.keys()), index=mes_atual - 1)
+            ano_selecionado = col_a.selectbox("Ano:", [2024, 2025, 2026, 2027], index=[2024, 2025, 2026, 2027].index(ano_atual))
+            
+            num_mes = meses_opcoes[mes_selecionado]
+            # Descobre qual é o último dia do mês selecionado
+            _, ultimo_dia = calendar.monthrange(ano_selecionado, num_mes)
+            
+            data_inicio = datetime(ano_selecionado, num_mes, 1).date()
+            data_fim = datetime(ano_selecionado, num_mes, ultimo_dia).date()
+            
+        else:
+            ano_vigente = datetime.now().year
+            padrao_inicio = datetime(ano_vigente, datetime.now().month, 1).date()
+            padrao_fim = datetime.now().date()
+            
+            data_inicio = st.date_input("Data Inicial:", value=padrao_inicio, format="DD/MM/YYYY", key=f"di_{cli_sel}")
+            data_fim = st.date_input("Data Final:", value=padrao_fim, format="DD/MM/YYYY", key=f"df_{cli_sel}")
 
+        # Aplica o filtro de data
         if data_inicio and data_fim:
             mask_data = (df_view['data_publicacao'].dt.date >= data_inicio) & (df_view['data_publicacao'].dt.date <= data_fim)
             df_view_filtrado_data = df_view[mask_data]
@@ -532,7 +510,6 @@ if not df_view.empty:
             df_view_filtrado_data = df_view
 
         estados_disp = sorted([e for e in df_view_filtrado_data['estado'].unique() if pd.notna(e) and e != ""])
-        # Inserido o aviso visual de "Em Correção" conforme solicitado
         filtro_estado = st.multiselect("Filtrar Estado: ⚠️ (Em correção)", estados_disp)
 
         midias_disp = sorted([m for m in df_view_filtrado_data['canal'].unique() if pd.notna(m) and m != ""])
@@ -559,7 +536,7 @@ if not df_view.empty:
             st.rerun()
 
     # ============================================================
-    # CÁLCULO DO PERÍODO ANTERIOR (para os deltas de comparação)
+    # CÁLCULO DO PERÍODO ANTERIOR
     # ============================================================
     delta_dias_periodo = (data_fim - data_inicio).days + 1
     data_fim_anterior = data_inicio - timedelta(days=1)
@@ -590,7 +567,7 @@ if not df_view.empty:
         val_total_ant = 0.0
 
     # ============================================================
-    # ÁREA PRINCIPAL: TÍTULO + AVISO + ABAS DE RESULTADOS
+    # ÁREA PRINCIPAL
     # ============================================================
     st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
 
@@ -603,7 +580,8 @@ if not df_view.empty:
     aud_total = safe_float(df_view_final['audiencia'].apply(limpar_valor_numerico).sum())
     val_total = safe_float(df_view_final.apply(lambda r: extrair_valoracao_real(r['valoracao'], r['sentimento']), axis=1).sum())
 
-    aba_resumo, aba_ia, aba_tabela = st.tabs(["📊 Resumo", "🧠 Resumo Executivo", "📋 Tabela Completa"])
+    # Aba de IA removida! Ficaram apenas o Resumo visual e a Tabela.
+    aba_resumo, aba_tabela = st.tabs(["📊 Resumo", "📋 Tabela Completa"])
 
     with aba_resumo:
         col_cards, col_graficos = st.columns([1, 1.2])
@@ -649,14 +627,12 @@ if not df_view.empty:
                     qtd_sem_idm = total_materias - qtd_idm
                     c_idm1, c_idm2 = st.columns(2)
                     c_idm1.metric("IDM", formatar_numero_br(qtd_idm, 0))
-                    # Ajustado de "Sem idm" para "Não idm"
                     c_idm2.metric("Não idm", formatar_numero_br(qtd_sem_idm, 0))
                 elif "tier" in df_view_final.columns:
                     qtd_tier1 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 1"])
                     qtd_tier2 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 2"])
                     c_t1, c_t2 = st.columns(2)
                     c_t1.metric("Tier 1", formatar_numero_br(qtd_tier1, 0))
-                    # Ajustado de "Tier 2" para "Outros"
                     c_t2.metric("Outros", formatar_numero_br(qtd_tier2, 0))
 
         with col_graficos:
@@ -667,28 +643,24 @@ if not df_view.empty:
                     df_pizza = df_canal_padrao.value_counts().reset_index()
                     df_pizza.columns = ['Canal', 'Quantidade']
                     
-                    # Dicionário de cores definindo a identidade visual dos aplicativos
                     mapa_cores_midia = {
-                        'Facebook': '#1877F2',
-                        'Instagram': '#E1306C',
-                        'X / Twitter': '#000000',
-                        'Linkedin': '#0A66C2',
-                        'Youtube': '#FF0000',
-                        'Tiktok': '#808080',
-                        'Portal de Notícias': '#6C5CE7',
-                        'Impresso': '#A29BFE',
-                        'TV': '#00CEC9',
-                        'Rádio': '#FDCB6E',
-                        'Podcast': '#E17055'
+                        'Facebook': '#1877F2', 'Instagram': '#E1306C', 'X / Twitter': '#000000',
+                        'Linkedin': '#0A66C2', 'Youtube': '#FF0000', 'Tiktok': '#808080',
+                        'Portal de Notícias': '#6C5CE7', 'Impresso': '#A29BFE',
+                        'TV': '#00CEC9', 'Rádio': '#FDCB6E', 'Podcast': '#E17055'
                     }
                     
                     fig_pizza = px.pie(df_pizza, names='Canal', values='Quantidade', color='Canal', color_discrete_map=mapa_cores_midia)
-                    fig_pizza.update_traces(textposition='inside', textinfo='percent', hoverinfo='label+percent')
+                    
+                    # Alteração: textposition='auto' empurra fatias muito pequenas (como <1%) para fora, criando uma linha de conexão (seta).
+                    fig_pizza.update_traces(textposition='auto', textinfo='percent', hoverinfo='label+percent')
+                    
                     fig_pizza.update_layout(margin=dict(t=10, b=10, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", height=280)
                     st.plotly_chart(fig_pizza, use_container_width=True)
 
                 with st.container(border=True):
-                    st.markdown("<span class='terminal-label'>Geomapping</span><h4>Publicações por Estado</h4>", unsafe_allow_html=True)
+                    # Alteração: Emoji de Alerta inserido no Gráfico de Estado
+                    st.markdown("<span class='terminal-label'>Geomapping</span><h4>⚠️ Publicações por Estado</h4>", unsafe_allow_html=True)
                     df_barras = df_view_final['estado'].value_counts().reset_index()
                     df_barras.columns = ['Estado', 'Quantidade']
                     fig_barras = px.bar(df_barras, x='Estado', y='Quantidade', text_auto=True)
@@ -745,7 +717,6 @@ if not df_view.empty:
                     freq_agrupamento = 'ME'
                     formato_label = '%m/%Y'
 
-                # Correção: Adicionados label='left' e closed='left' para resolver a falha de datas futuras ("05/10")
                 df_evolucao = df_view_final.set_index('data_publicacao').resample(freq_agrupamento, label='left', closed='left').size().reset_index(name='Quantidade')
                 df_evolucao['Rótulo'] = df_evolucao['data_publicacao'].dt.strftime(formato_label)
 
@@ -772,55 +743,7 @@ if not df_view.empty:
 
                 st.plotly_chart(fig_evolucao, use_container_width=True)
 
-    with aba_ia:
-        if total_materias > 0:
-            with st.container(border=True):
-                st.markdown("<span class='terminal-label'>IA</span><h4>🧠 Resumo Executivo</h4>", unsafe_allow_html=True)
-
-                chave_atual = f"{cli_sel}_{data_inicio}_{data_fim}_{filtro_estado}_{filtro_midia}_{busca_titulo}"
-
-                if st.button("Gerar resumo executivo"):
-                    canal_principal = itens[0][0] if itens else "N/A"
-                    estado_principal = (
-                        df_barras.sort_values(by='Quantidade', ascending=False).iloc[0]['Estado']
-                        if not df_barras.empty else "N/A"
-                    )
-                    sentimento_valido = df_view_final['sentimento'].astype(str).str.strip()
-                    sentimento_valido = sentimento_valido[sentimento_valido != ""]
-                    sentimento_predominante_txt = sentimento_valido.mode()[0] if not sentimento_valido.empty else "N/A"
-                    variacao_txt = calcular_delta(total_materias, total_materias_ant, "") or "sem período anterior para comparar"
-
-                    prompt_dados = f"""Escreva um resumo executivo sobre o monitoramento de mídia do cliente "{cli_sel}", \
-referente ao período de {data_inicio.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}, com base apenas nestes dados:
-- Total de matérias: {formatar_numero_br(total_materias, 0)}
-- Variação frente ao período anterior: {variacao_txt}
-- Audiência estimada: {formatar_audiencia(aud_total)}
-- Valor editorial: {formatar_moeda(val_total)}
-- Sentimento predominante: {sentimento_predominante_txt}
-- Canal com mais menções: {canal_principal}
-- Estado com mais publicações: {estado_principal}
-
-Não invente nenhum número fora dos listados acima. Tom profissional, para um cliente de agência de comunicação."""
-
-                    with st.spinner("Gerando resumo com IA..."):
-                        texto_resumo, erro = gerar_resumo_executivo(prompt_dados)
-
-                    if erro:
-                        st.warning(erro)
-                    else:
-                        st.session_state[f'resumo_executivo_{chave_atual}'] = texto_resumo
-
-                if f'resumo_executivo_{chave_atual}' in st.session_state:
-                    st.markdown(st.session_state[f'resumo_executivo_{chave_atual}'])
-                else:
-                    st.caption("Clique no botão para gerar um resumo automático com base nos dados filtrados.")
-        else:
-            st.info("Sem dados suficientes para gerar um resumo executivo.")
-
     with aba_tabela:
-        # ============================================================
-        # TABELA E EXPORTAÇÃO
-        # ============================================================
         df_preview = df_view_final.copy()
         df_preview['data_formatada'] = df_preview['data_publicacao'].dt.tz_localize(None)
         df_preview['audiencia'] = df_preview['audiencia'].apply(limpar_valor_numerico)
