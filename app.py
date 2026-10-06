@@ -667,7 +667,7 @@ if not df_view.empty:
                     st.plotly_chart(fig_barras, use_container_width=True)
 
                 with st.container(border=True):
-                    st.markdown("<span class='terminal-label'>Ranking</span><h4>Top Veículos (Tier 1 / IDM)</h4>", unsafe_allow_html=True)
+                    st.markdown("<span class='terminal-label'>Ranking</span><h4>Top 10 Veículos (Tier 1 / IDM)</h4>", unsafe_allow_html=True)
 
                     if cli_sel == "Ambev":
                         mask_top = df_view_final['check_idm'].astype(str).str.strip() == "IDM"
