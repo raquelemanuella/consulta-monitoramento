@@ -7,7 +7,9 @@ import requests
 from datetime import datetime, timedelta
 import calendar
 import plotly.express as px
-
+import plotly.graph_objects as go
+import gspread
+from google.oauth2.service_account import Credentials
 from dicionario_tiers import DICIONARIO_VEICULOS
 
 st.set_page_config(page_title="Consulta de Monitoramento - Agência LK", page_icon="logo_lk.png", layout="wide")
@@ -410,6 +412,70 @@ def carregar_dados_banco(cliente):
         inicio += tamanho_pagina
     return pd.DataFrame(todos_dados)
 
+# ============================================================
+# CONEXÃO COM O GOOGLE SHEETS (FAROL DE METAS)
+# ============================================================
+@st.cache_data(ttl=600, show_spinner=False)
+def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
+    try:
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        credenciais_dict = dict(st.secrets["gcp_service_account"])
+        credentials = Credentials.from_service_account_info(credenciais_dict, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        
+        # ATENÇÃO: Confirme se este é exatamente o nome do arquivo no seu Google Drive
+        planilha = gc.open("FAROL DE METAS — Metas & Realizados | 2026 > LK") 
+        
+        # Mapa "De-Para" (Nome no filtro do Streamlit -> Sigla da Aba da Planilha)
+        mapa_abas = {
+            "Faculdade Baiana de Direito e Gestão": "FBD",
+            "Ambev": "AMBEV",
+            "XP Investimentos": "XP",
+            "99 Food": "99FOOD",
+            "Grupo Raymundo da Fonte": "GRF",
+            "Clínica Sim": "SIM",
+            "Villa Global Education": "VILLA",
+            "ACEC": "ACEC",
+            "Feed Experience Hub": "FEED"
+        }
+        
+        nome_aba = mapa_abas.get(cliente_selecionado)
+        if not nome_aba:
+            return None # Cliente sem aba de metas ainda
+            
+        aba = planilha.worksheet(nome_aba)
+        
+        # value_render_option='UNFORMATTED_VALUE' lê os números puros para podermos calcular
+        dados = aba.get_all_values(value_render_option='UNFORMATTED_VALUE')
+        df_sheets = pd.DataFrame(dados)
+        
+        # A Linha 3 do Excel (onde estão Jan, Fev, Mar) é o índice 2 no Python
+        linha_meses = df_sheets.iloc[2].tolist() 
+        if mes_abrev not in linha_meses:
+            return None
+        idx_mes = linha_meses.index(mes_abrev)
+        
+        # Varredura: Achar os KPIs (Coluna I = índice 8) e "roubar" a respectiva Meta
+        metas_extraidas = {}
+        for i in range(len(df_sheets)):
+            kpi_nome = str(df_sheets.iloc[i, 8]).strip()
+            
+            # Se achou um texto de KPI válido...
+            if kpi_nome and kpi_nome != "KPI's" and i + 1 < len(df_sheets):
+                # Se a linha de baixo estiver escrita "Meta"...
+                if str(df_sheets.iloc[i + 1, 8]).strip() == "Meta":
+                    valor_meta_bruto = df_sheets.iloc[i + 1, idx_mes]
+                    metas_extraidas[kpi_nome] = safe_float(valor_meta_bruto)
+                    
+        return metas_extraidas
+
+    except Exception as e:
+        st.error(f"⚠️ Erro ao conectar com o Google Sheets: {e}")
+        return None
+
 CLIENTES = [
     "2GB Entretenimento", "99 City Launches", "99 Food", "99 Metrô", "Ambev", "ACEC", "Camarote LEM", "CCBB Salvador", "Clínica Sim",
     "Crema Gelato", "Faculdade Baiana de Direito e Gestão", "Feed Experience Hub",
@@ -427,9 +493,7 @@ with st.sidebar:
             st.image("logo_lk.png", use_container_width=True)
         except:
             pass
-
     st.markdown("---")
-
     cli_sel = st.selectbox("Cliente:", ["Todos os Clientes"] + CLIENTES)
 
 # ============================================================
@@ -465,7 +529,6 @@ if not df_view.empty:
     # ============================================================
     with st.sidebar:
         st.markdown("<span class='terminal-label'>Filtros</span>", unsafe_allow_html=True)
-
         tipo_filtro_data = st.radio("Selecione o período por:", ["Mês Fechado", "Período Personalizado"], horizontal=True)
         
         if tipo_filtro_data == "Mês Fechado":
@@ -487,7 +550,6 @@ if not df_view.empty:
             
             data_inicio = datetime(ano_selecionado, num_mes, 1).date()
             data_fim = datetime(ano_selecionado, num_mes, ultimo_dia).date()
-            
         else:
             ano_vigente = datetime.now().year
             padrao_inicio = datetime(ano_vigente, datetime.now().month, 1).date()
@@ -573,7 +635,7 @@ if not df_view.empty:
     aud_total = safe_float(df_view_final['audiencia'].apply(limpar_valor_numerico).sum())
     val_total = safe_float(df_view_final.apply(lambda r: extrair_valoracao_real(r['valoracao'], r['sentimento']), axis=1).sum())
 
-    aba_resumo, aba_tabela = st.tabs(["📊 Resumo", "📋 Tabela Completa"])
+    aba_resumo, aba_farol, aba_tabela = st.tabs(["📊 Resumo", "🚦 Farol de Metas", "📋 Tabela Completa"])
 
     with aba_resumo:
         col_cards, col_graficos = st.columns([1, 1.2])
@@ -581,17 +643,17 @@ if not df_view.empty:
         with col_cards:
             with st.container(border=True):
                 st.metric(
-                    "📰 Total de Matérias", formatar_numero_br(total_materias, 0),
+                    "Total de Matérias", formatar_numero_br(total_materias, 0),
                     delta=calcular_delta(total_materias, total_materias_ant, texto_base_delta)
                 )
 
                 k1, k2 = st.columns(2)
                 k1.metric(
-                    "📡 Audiência Estimada", formatar_audiencia(aud_total),
+                    "Audiência Estimada", formatar_audiencia(aud_total),
                     delta=calcular_delta(aud_total, aud_total_ant, texto_base_delta)
                 )
                 k2.metric(
-                    "💰 Valor Editorial", formatar_moeda(val_total),
+                    "Valor Editorial", formatar_moeda(val_total),
                     delta=calcular_delta(val_total, val_total_ant, texto_base_delta)
                 )
                 st.markdown("---")
@@ -599,7 +661,7 @@ if not df_view.empty:
                 # ============================================================
                 # CLASSIFICAÇÃO POSICIONADA ACIMA DE DISTRIBUTION
                 # ============================================================
-                st.markdown("<span class='terminal-label'>🏷️ Classificação</span>", unsafe_allow_html=True)
+                st.markdown("<span class='terminal-label'> Classificação</span>", unsafe_allow_html=True)
                 if cli_sel == "Ambev":
                     qtd_idm = len(df_view_final[df_view_final['check_idm'].astype(str).str.strip() == "IDM"])
                     qtd_sem_idm = total_materias - qtd_idm
@@ -618,7 +680,7 @@ if not df_view.empty:
                 # ============================================================
                 # DISTRIBUTION
                 # ============================================================
-                st.markdown("<span class='terminal-label'>📡 Distribution</span>", unsafe_allow_html=True)
+                st.markdown("<span class='terminal-label'> Distribution</span>", unsafe_allow_html=True)
                 contagem = df_view_final['canal'].value_counts().to_dict()
                 canais_presentes = {}
                 for nome_canal, qtd in contagem.items():
@@ -644,21 +706,19 @@ if not df_view.empty:
                     
                     mapa_cores_midia = {
                         'Facebook': '#1877F2', 'Instagram': '#E1306C', 'X / Twitter': '#000000',
-                        'Linkedin': '#0A66C2', 'Youtube': '#FF0000', 'Tiktok': '#808080',
+                        'Linkedin': '#0A66C2', 'Youtube': '#FF0000', 'Tiktok': '#000000',
                         'Portal de Notícias': '#6C5CE7', 'Impresso': '#A29BFE',
                         'TV': '#00CEC9', 'Rádio': '#FDCB6E', 'Podcast': '#E17055'
                     }
                     
                     fig_pizza = px.pie(df_pizza, names='Canal', values='Quantidade', color='Canal', color_discrete_map=mapa_cores_midia)
                     
-                    # Alterado de 'auto' para 'inside' para que os percentuais fiquem dentro das fatias sem puxar linhas externas
                     fig_pizza.update_traces(textposition='inside', textinfo='percent', hoverinfo='label+percent')
-                    
                     fig_pizza.update_layout(margin=dict(t=10, b=10, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", height=280)
                     st.plotly_chart(fig_pizza, use_container_width=True)
 
                 with st.container(border=True):
-                    st.markdown("<span class='terminal-label'>Geomapping</span><h4>⚠️ Publicações por Estado</h4>", unsafe_allow_html=True)
+                    st.markdown("<span class='terminal-label'>Geomapping</span><h4>Publicações por Estado</h4>", unsafe_allow_html=True)
                     df_barras = df_view_final['estado'].value_counts().reset_index()
                     df_barras.columns = ['Estado', 'Quantidade']
                     fig_barras = px.bar(df_barras, x='Estado', y='Quantidade', text_auto=True)
@@ -667,7 +727,7 @@ if not df_view.empty:
                     st.plotly_chart(fig_barras, use_container_width=True)
 
                 with st.container(border=True):
-                    st.markdown("<span class='terminal-label'>Ranking</span><h4>Top 10 Veículos (Tier 1 / IDM)</h4>", unsafe_allow_html=True)
+                    st.markdown("<span class='terminal-label'>Ranking</span><h4>Top Veículos (Tier 1 / IDM)</h4>", unsafe_allow_html=True)
 
                     if cli_sel == "Ambev":
                         mask_top = df_view_final['check_idm'].astype(str).str.strip() == "IDM"
@@ -741,6 +801,107 @@ if not df_view.empty:
 
                 st.plotly_chart(fig_evolucao, use_container_width=True)
 
+    with aba_farol:
+        st.markdown("<span class='terminal-label'>Tracking</span><h4>Farol de Metas vs. Realizado</h4>", unsafe_allow_html=True)
+        
+        if cli_sel == "Todos os Clientes":
+            st.warning("⚠️ Por favor, selecione um cliente específico na barra lateral para carregar as metas individuais.")
+        else:
+            col_seletor, _ = st.columns([1, 4])
+            meses_abrev = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+            mes_selecionado = col_seletor.selectbox("Selecione o mês da meta:", meses_abrev, index=datetime.now().month - 1)
+            
+            with st.spinner("Buscando metas na planilha..."):
+                metas = buscar_metas_do_cliente_sheets(cli_sel, mes_selecionado)
+                
+            if not metas:
+                st.info(f"Nenhuma meta cadastrada ou aba '{cli_sel}' não encontrada na planilha para o mês de {mes_selecionado}.")
+            else:
+                # 1. Calculamos o que já temos no Supabase (ignorando o que não temos ainda)
+                realizados = {}
+                realizados["Total de Publicações"] = len(df_view_final)
+                realizados["Audiência Estimada"] = aud_total
+                realizados["Ad Value"] = val_total
+                
+                df_canal = df_view_final['canal'].apply(padronizar_canal).str.upper()
+                realizados["TV"] = len(df_view_final[df_canal == 'TV'])
+                realizados["Rádio"] = len(df_view_final[df_canal == 'RÁDIO'])
+                
+                sentimentos = df_view_final['sentimento'].astype(str).str.lower().str.strip()
+                qtd_positivas = len(sentimentos[sentimentos.isin(['positivo', 'positiva'])])
+                qtd_negativas = len(sentimentos[sentimentos.isin(['negativo', 'negativa'])])
+                total_validos = len(sentimentos[sentimentos != ""])
+                if total_validos > 0:
+                    realizados["Net Sentiment Score %"] = (qtd_positivas - qtd_negativas) / total_validos
+                else:
+                    realizados["Net Sentiment Score %"] = 0.0
+
+                # 2. Preparamos os dados para o gráfico de 100%
+                dados_grafico = []
+                for kpi, valor_meta in metas.items():
+                    if pd.isna(valor_meta) or valor_meta == "" or kpi not in realizados:
+                        continue
+                        
+                    valor_realizado = realizados[kpi]
+                    
+                    if valor_meta > 0:
+                        pct_alcancado = (valor_realizado / valor_meta) * 100
+                    else:
+                        pct_alcancado = 0 if valor_realizado == 0 else 100
+                        
+                    barra_azul = min(pct_alcancado, 100) # Trava em 100% para não desfigurar o gráfico
+                    barra_vermelha = 100 - barra_azul
+                    
+                    # Textos customizados para o Hover do mouse
+                    if "%" in kpi:
+                        txt_m = f"{valor_meta*100:.1f}%"
+                        txt_r = f"{valor_realizado*100:.1f}%"
+                    elif kpi == "Ad Value":
+                        txt_m = formatar_moeda(valor_meta)
+                        txt_r = formatar_moeda(valor_realizado)
+                    else:
+                        txt_m = formatar_numero_br(valor_meta)
+                        txt_r = formatar_numero_br(valor_realizado)
+                        
+                    dados_grafico.append({
+                        "KPI": kpi,
+                        "Alcançado (%)": barra_azul,
+                        "Faltante (%)": barra_vermelha,
+                        "Texto": f"<b>{kpi}</b><br>Meta: {txt_m}<br>Realizado: {txt_r}<br>Progresso: {pct_alcancado:.1f}%"
+                    })
+                    
+                # 3. Desenhamos o gráfico
+                if dados_grafico:
+                    df_graf = pd.DataFrame(dados_grafico).iloc[::-1] # Inverte para manter a ordem da planilha
+                    
+                    fig = go.Figure()
+                    
+                    # Barra do Alcançado
+                    fig.add_trace(go.Bar(
+                        y=df_graf['KPI'], x=df_graf['Alcançado (%)'], name='Alcançado',
+                        orientation='h', marker=dict(color='#6C5CE7'),
+                        hoverinfo='text', text=df_graf['Texto'], textposition='none'
+                    ))
+                    
+                    # Barra da Meta (Faltante)
+                    fig.add_trace(go.Bar(
+                        y=df_graf['KPI'], x=df_graf['Faltante (%)'], name='Meta',
+                        orientation='h', marker=dict(color='#ff7675'), # Vermelho similar ao print
+                        hoverinfo='text', text=df_graf['Texto'], textposition='none'
+                    ))
+                    
+                    fig.update_layout(
+                        barmode='stack',
+                        xaxis=dict(range=[0, 100], tickvals=[0, 25, 50, 75, 100], ticktext=['0%', '25%', '50%', '75%', '100%']),
+                        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                        margin=dict(l=200, r=20, t=20, b=40),
+                        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5),
+                        height=150 + (len(df_graf) * 45) # Altura automática
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("Nenhum KPI do painel com meta lançada no mês selecionado.")
+
     with aba_tabela:
         df_preview = df_view_final.copy()
         df_preview['data_formatada'] = df_preview['data_publicacao'].dt.tz_localize(None)
@@ -795,14 +956,13 @@ if not df_view.empty:
             }
         )
         
-        # --- BOTÃO DE ATUALIZAR REPOSICIONADO PARA O CANTO INFERIOR ---
         st.markdown("<br>", unsafe_allow_html=True)
         col_espaco, col_btn_atualizar = st.columns([3, 1])
         with col_btn_atualizar:
             if st.button("🔄 Atualizar Dados do Banco", use_container_width=True, key="btn_atualizar_tabela"):
                 carregar_dados_banco.clear()
                 st.rerun()
-        # -------------------------------------------------------------
+
 else:
     with st.sidebar:
         st.markdown("---")
