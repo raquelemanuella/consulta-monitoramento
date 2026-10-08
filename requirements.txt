@@ -4,3 +4,5 @@ supabase
 plotly
 xlsxwriter
 requests
+gspread
+google-auth
