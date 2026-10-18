@@ -412,7 +412,7 @@ def carregar_dados_banco(cliente):
     return pd.DataFrame(todos_dados)
 
 # ============================================================
-# CONEXÃO COM O GOOGLE SHEETS (FAROL DE METAS)
+# CONEXÃO COM O GOOGLE SHEETS (FAROL DE METAS) - MODO DIAGNÓSTICO
 # ============================================================
 @st.cache_data(ttl=600, show_spinner=False)
 def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
@@ -425,14 +425,13 @@ def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
         credentials = Credentials.from_service_account_info(credenciais_dict, scopes=scopes)
         gc = gspread.authorize(credentials)
         
-        # O robô tenta abrir com um nome, se falhar tenta com o outro
         try:
             planilha = gc.open("FAROL DE METAS — Metas & Realizados | 2026 > LK") 
         except gspread.exceptions.SpreadsheetNotFound:
             try:
                 planilha = gc.open("Consulta de Dados - Monitoramento")
             except gspread.exceptions.SpreadsheetNotFound:
-                st.error("⚠️ Planilha Google não encontrada com nenhum dos nomes previstos.")
+                st.error("⚠️ Planilha Google não encontrada.")
                 return None
         
         mapa_abas = {
@@ -455,69 +454,18 @@ def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
         dados = aba.get_all_values(value_render_option='UNFORMATTED_VALUE')
         df_sheets = pd.DataFrame(dados)
         
-        # --- MOTOR DE BUSCA À PROVA DE BALA ---
-        idx_linha_meses = -1
-        idx_col_mes = -1
-        idx_col_kpi = -1
+        # --- MODO DIAGNÓSTICO (RAIO-X) ---
+        st.error(f"🚨 RAIO-X DA ABA: {nome_aba}")
+        st.write("Aqui estão as primeiras 15 linhas e 20 colunas que o Python está a ler:")
+        # Mostra a tabela diretamente no ecrã da sua aplicação
+        st.dataframe(df_sheets.iloc[:15, :20])
         
-        mes_procura = mes_abrev.lower()[:3] # Ex: "Set" vira "set"
-        
-        # Procura o mês nas primeiras 5 linhas para garantir
-        for idx in range(min(5, len(df_sheets))):
-            linha_temp = [str(x).strip().lower() for x in df_sheets.iloc[idx].tolist()]
-            
-            for col_idx, valor_celula in enumerate(linha_temp):
-                # Se encontrou o mês e a palavra é curta (ex: "set. / 26")
-                if mes_procura in valor_celula and idx_col_mes == -1 and len(valor_celula) < 15:
-                    idx_linha_meses = idx
-                    idx_col_mes = col_idx
-                
-                # Se encontrou a palavra KPI ou Indicador
-                if ("kpi" in valor_celula or "indicador" in valor_celula) and idx_col_kpi == -1:
-                    idx_col_kpi = col_idx
-                    
-        # Se não achou "KPI", procura pela palavra "Total de Publicações" para encontrar a coluna
-        if idx_col_kpi == -1:
-            for idx in range(min(10, len(df_sheets))):
-                linha_temp = [str(x).strip().lower() for x in df_sheets.iloc[idx].tolist()]
-                for col_idx, valor_celula in enumerate(linha_temp):
-                    if "total de publicações" in valor_celula:
-                        idx_col_kpi = col_idx
-                        break
-                if idx_col_kpi != -1:
-                    break
-                    
-        # Último recurso: Coluna I (índice 8) ou J (índice 9) dependendo do formato visual comum
-        if idx_col_kpi == -1:
-            idx_col_kpi = 8
-            
-        # Se mesmo assim não encontrou em que coluna o mês está, aborta
-        if idx_linha_meses == -1 or idx_col_mes == -1:
-            return None
-            
-        # Varrer a coluna descobrindo as metas reais a partir da linha do mês
-        metas_extraidas = {}
-        for i in range(idx_linha_meses, len(df_sheets)):
-            kpi_nome = str(df_sheets.iloc[i, idx_col_kpi]).strip()
-            
-            if kpi_nome and i + 1 < len(df_sheets):
-                # Olha para a linha imediatamente abaixo à procura da palavra "Meta"
-                if "meta" in str(df_sheets.iloc[i + 1, idx_col_kpi]).strip().lower():
-                    valor_meta_bruto = df_sheets.iloc[i + 1, idx_col_mes]
-                    metas_extraidas[kpi_nome] = safe_float(valor_meta_bruto)
-                    
-        return metas_extraidas
+        # Vamos parar o código aqui para analisarmos a imagem
+        return None
 
     except Exception as e:
         st.error(f"⚠️ Erro ao conectar com o Google Sheets: {e}")
         return None
-
-CLIENTES = [
-    "2GB Entretenimento", "99 City Launches", "99 Food", "99 Metrô", "Ambev", "ACEC", "Camarote LEM", "CCBB Salvador", "Clínica Sim",
-    "Crema Gelato", "Faculdade Baiana de Direito e Gestão", "Feed Experience Hub",
-    "Grupo Loro", "Grupo Raymundo da Fonte", "JBS Alimentos", "Konecta", "Mercado Pago", "Nestlé",
-    "Pepsico", "Villa Global Education", "XP Investimentos"
-]
 
 # ============================================================
 # BARRA LATERAL: LOGO + PAINEL DE FILTROS COMPLETO
