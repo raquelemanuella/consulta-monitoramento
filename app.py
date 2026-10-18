@@ -580,7 +580,7 @@ if not df_view.empty:
     # ============================================================
     with st.sidebar:
         st.markdown("<span class='terminal-label'>Filtros</span>", unsafe_allow_html=True)
-        tipo_filtro_data = st.radio("Selecione o período por:", ["Mês Fechado", "Ano Completo", "Período Personalizado"], horizontal=True)
+        tipo_filtro_data = st.radio("Selecione o período por:", ["Mês Atual", "Ano Completo", "Período Personalizado"], horizontal=True)
         
         if tipo_filtro_data == "Mês Fechado":
             col_m, col_a = st.columns(2)
