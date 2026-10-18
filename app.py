@@ -580,9 +580,9 @@ if not df_view.empty:
     # ============================================================
     with st.sidebar:
         st.markdown("<span class='terminal-label'>Filtros</span>", unsafe_allow_html=True)
-        tipo_filtro_data = st.radio("Selecione o período por:", ["Mês Fechado", "Ano Completo", "Período Personalizado"], horizontal=True)
+        tipo_filtro_data = st.radio("Selecione o período por:", ["Mês Atual", "Ano Completo", "Período Personalizado"], horizontal=True)
         
-        if tipo_filtro_data == "Mês Fechado":
+        if tipo_filtro_data == "Mês Atual":
             col_m, col_a = st.columns(2)
             meses_opcoes = {
                 "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4,
@@ -951,7 +951,7 @@ if not df_view.empty:
         if cli_sel == "Todos os Clientes":
             st.warning("⚠️ Por favor, selecione um cliente específico na barra lateral para carregar as metas individuais.")
         elif not mes_farol:
-            st.warning("⚠️ O Farol de Metas não suporta o 'Período Personalizado'. Por favor, selecione 'Mês Fechado' ou 'Ano Completo' na barra lateral.")
+            st.warning("⚠️ O Farol de Metas não suporta o 'Período Personalizado'. Por favor, selecione 'Mês Atual' ou 'Ano Completo' na barra lateral.")
         elif not metas:
             st.info(f"Nenhuma meta encontrada na folha para a aba '{cli_sel}' no período selecionado. Verifique se a aba existe ou se a coluna está preenchida.")
         else:
