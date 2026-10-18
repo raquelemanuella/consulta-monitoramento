@@ -858,8 +858,8 @@ if not df_view.empty:
                 fig_evolucao.update_yaxes(showgrid=True, gridcolor='#ECEBFA', range=[0, teto_eixo_y])
 
                 st.plotly_chart(fig_evolucao, use_container_width=True)
-
-with aba_farol:
+                
+                with aba_farol:
         st.markdown("<span class='terminal-label'>Tracking</span><h4>Farol de Metas vs. Realizado</h4>", unsafe_allow_html=True)
         
         if cli_sel == "Todos os Clientes":
@@ -938,8 +938,8 @@ with aba_farol:
                     st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.info("Nenhum KPI com dados preenchidos foi encontrado para o período selecionado.")
-
-with aba_tabela:
+                    
+                    with aba_tabela:
         df_preview = df_view_final.copy()
         df_preview['data_formatada'] = df_preview['data_publicacao'].dt.tz_localize(None)
         df_preview['audiencia'] = df_preview['audiencia'].apply(limpar_valor_numerico)
