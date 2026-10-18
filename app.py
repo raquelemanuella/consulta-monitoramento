@@ -412,7 +412,7 @@ def carregar_dados_banco(cliente):
     return pd.DataFrame(todos_dados)
 
 # ============================================================
-# CONEXÃO COM O GOOGLE SHEETS (FAROL DE METAS) - MODO DIAGNÓSTICO
+# CONEXÃO COM O GOOGLE SHEETS (FAROL DE METAS)
 # ============================================================
 @st.cache_data(ttl=600, show_spinner=False)
 def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
@@ -454,70 +454,55 @@ def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
         dados = aba.get_all_values(value_render_option='UNFORMATTED_VALUE')
         df_sheets = pd.DataFrame(dados)
         
-        # --- MODO DIAGNÓSTICO (RAIO-X) ---
-        st.error(f"🚨 RAIO-X DA ABA: {nome_aba}")
-        st.write("Aqui estão as primeiras 15 linhas e 20 colunas que o Python está a ler:")
-        # Mostra a tabela diretamente no ecrã da sua aplicação
-        st.dataframe(df_sheets.iloc[:15, :20])
-        
-        # Vamos parar o código aqui para analisarmos a imagem
-        return None
-
-    except Exception as e:
-        st.error(f"⚠️ Erro ao conectar com o Google Sheets: {e}")
-        return None
-            
-        aba = planilha.worksheet(nome_aba)
-        dados = aba.get_all_values(value_render_option='UNFORMATTED_VALUE')
-        df_sheets = pd.DataFrame(dados)
-        
-        # --- MOTOR DE BUSCA À PROVA DE BALA ---
         idx_linha_meses = -1
         idx_col_mes = -1
         idx_col_kpi = -1
         
-        mes_procura = mes_abrev.lower()[:3] # Ex: "Set" vira "set"
-        
-        # Procura o mês nas primeiras 5 linhas para garantir
+        # 1. Encontrar a coluna de KPI's exata (ignorando a armadilha da coluna "Indicador")
         for idx in range(min(5, len(df_sheets))):
             linha_temp = [str(x).strip().lower() for x in df_sheets.iloc[idx].tolist()]
-            
             for col_idx, valor_celula in enumerate(linha_temp):
-                # Se encontrou o mês e a palavra é curta (ex: "set. / 26")
-                if mes_procura in valor_celula and idx_col_mes == -1 and len(valor_celula) < 15:
-                    idx_linha_meses = idx
-                    idx_col_mes = col_idx
-                
-                # Se encontrou a palavra KPI ou Indicador
-                if ("kpi" in valor_celula or "indicador" in valor_celula) and idx_col_kpi == -1:
+                if "kpi" in valor_celula:
                     idx_col_kpi = col_idx
-                    
-        # Se não achou "KPI", procura pela palavra "Total de Publicações" para encontrar a coluna
-        if idx_col_kpi == -1:
-            for idx in range(min(10, len(df_sheets))):
-                linha_temp = [str(x).strip().lower() for x in df_sheets.iloc[idx].tolist()]
-                for col_idx, valor_celula in enumerate(linha_temp):
-                    if "total de publicações" in valor_celula:
-                        idx_col_kpi = col_idx
-                        break
-                if idx_col_kpi != -1:
+                    idx_linha_meses = idx
                     break
-                    
-        # Último recurso: Coluna I (índice 8) ou J (índice 9) dependendo do formato visual comum
+            if idx_col_kpi != -1:
+                break
+                
+        # Fallback de segurança (se alguém apagar o cabeçalho KPI, ele vai para a coluna I)
         if idx_col_kpi == -1:
             idx_col_kpi = 8
+            idx_linha_meses = 1
             
-        # Se mesmo assim não encontrou em que coluna o mês está, aborta
-        if idx_linha_meses == -1 or idx_col_mes == -1:
-            return None
+        # 2. Encontrar a coluna do Mês escolhido
+        mes_procura = mes_abrev.lower()[:3]
+        
+        for idx in range(max(0, idx_linha_meses - 1), min(5, len(df_sheets))):
+            linha_temp = [str(x).strip().lower() for x in df_sheets.iloc[idx].tolist()]
             
-        # Varrer a coluna descobrindo as metas reais a partir da linha do mês
+            # O SEGREDO: O robô agora só procura o mês nas colunas à DIREITA dos KPIs
+            for col_idx in range(idx_col_kpi + 1, len(linha_temp)):
+                valor_celula = linha_temp[col_idx]
+                
+                # Se o texto tiver o mês (ex: "out" dentro de "out. / 26")
+                if mes_procura in valor_celula and len(valor_celula) < 15:
+                    idx_col_mes = col_idx
+                    idx_linha_meses = idx # Regista a linha exata do mês
+                    break
+            if idx_col_mes != -1:
+                break
+                
+        # Se não encontrou o mês, para aqui
+        if idx_col_mes == -1:
+            return None 
+            
+        # 3. Varrer para baixo e extrair as metas
         metas_extraidas = {}
         for i in range(idx_linha_meses, len(df_sheets)):
             kpi_nome = str(df_sheets.iloc[i, idx_col_kpi]).strip()
             
             if kpi_nome and i + 1 < len(df_sheets):
-                # Olha para a linha imediatamente abaixo à procura da palavra "Meta"
+                # Olha diretamente para a célula abaixo à procura da palavra 'Meta'
                 if "meta" in str(df_sheets.iloc[i + 1, idx_col_kpi]).strip().lower():
                     valor_meta_bruto = df_sheets.iloc[i + 1, idx_col_mes]
                     metas_extraidas[kpi_nome] = safe_float(valor_meta_bruto)
