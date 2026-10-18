@@ -859,7 +859,7 @@ if not df_view.empty:
 
                 st.plotly_chart(fig_evolucao, use_container_width=True)
 
-   with aba_farol:
+with aba_farol:
         st.markdown("<span class='terminal-label'>Tracking</span><h4>Farol de Metas vs. Realizado</h4>", unsafe_allow_html=True)
         
         if cli_sel == "Todos os Clientes":
