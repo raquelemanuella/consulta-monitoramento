@@ -458,6 +458,7 @@ def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
         idx_col_mes = -1
         idx_col_kpi = -1
         
+        # 1. Encontrar a coluna de KPI's
         for idx in range(min(5, len(df_sheets))):
             linha_temp = [str(x).strip().lower() for x in df_sheets.iloc[idx].tolist()]
             for col_idx, valor_celula in enumerate(linha_temp):
@@ -472,6 +473,8 @@ def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
             idx_col_kpi = 8
             idx_linha_meses = 1
             
+        # 2. Encontrar a coluna do Mês (ou Ano/Y.T.D)
+        # Se escolher "Ano", procura por "y.t.d". Caso contrário, procura os 3 primeiros caracteres do mês
         mes_procura = "y.t.d" if mes_abrev == "Ano" else mes_abrev.lower()[:3]
         
         meses_num = {"jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6, 
@@ -485,9 +488,11 @@ def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
                 
                 encontrou = False
                 
+                # Verificação A: É um texto normal que contém o mês ou "y.t.d"?
                 if mes_procura in val_str and len(val_str) < 15:
                     encontrou = True
                 elif mes_procura_num: 
+                    # Verificação B: É uma Data Automática do Google Sheets? (Ignorado para a busca de Ano)
                     try:
                         val_num = float(valor_cru)
                         if 40000 < val_num < 50000:
@@ -507,12 +512,14 @@ def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
         if idx_col_mes == -1:
             return None 
             
+        # 3. Varrer a coluna para baixo e extrair Meta e Realizado
         metas_extraidas = {}
         for i in range(idx_linha_meses, len(df_sheets)):
             kpi_nome = str(df_sheets.iloc[i, idx_col_kpi]).strip()
             
             if kpi_nome and i + 1 < len(df_sheets):
                 if "meta" in str(df_sheets.iloc[i + 1, idx_col_kpi]).strip().lower():
+                    # O Realizado fica na linha atual do KPI, e a Meta na linha de baixo!
                     valor_realizado_bruto = df_sheets.iloc[i, idx_col_mes]
                     valor_meta_bruto = df_sheets.iloc[i + 1, idx_col_mes]
                     
@@ -576,13 +583,13 @@ if not df_view.empty:
     df_view['estado'] = df_view.apply(lambda r: inferir_estado(cli_sel, r['veiculo_nome'], r['localizacao']), axis=1)
 
     # ============================================================
-    # FILTROS NA BARRA LATERAL (AGORA CONTROLA O FAROL TAMBÉM)
+    # FILTROS NA BARRA LATERAL
     # ============================================================
     with st.sidebar:
         st.markdown("<span class='terminal-label'>Filtros</span>", unsafe_allow_html=True)
-        tipo_filtro_data = st.radio("Selecione o período por:", ["Mês Fechado", "Ano Completo", "Período Personalizado"], horizontal=True)
+        tipo_filtro_data = st.radio("Selecione o período por:", ["Mês Atual", "Período Personalizado"], horizontal=True)
         
-        if tipo_filtro_data == "Mês Fechado":
+        if tipo_filtro_data == "Mês Atual":
             col_m, col_a = st.columns(2)
             meses_opcoes = {
                 "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4,
@@ -592,6 +599,7 @@ if not df_view.empty:
             mes_atual = datetime.now().month
             ano_atual = datetime.now().year
             
+            nome_mes_atual = list(meses_opcoes.keys())[mes_atual - 1]
             mes_selecionado = col_m.selectbox("Mês:", list(meses_opcoes.keys()), index=mes_atual - 1)
             ano_selecionado = col_a.selectbox("Ano:", [2024, 2025, 2026, 2027], index=[2024, 2025, 2026, 2027].index(ano_atual))
             
@@ -600,17 +608,6 @@ if not df_view.empty:
             
             data_inicio = datetime(ano_selecionado, num_mes, 1).date()
             data_fim = datetime(ano_selecionado, num_mes, ultimo_dia).date()
-            
-            mes_farol = mes_selecionado[:3].capitalize() # Gera "Jan", "Fev", "Out"...
-            
-        elif tipo_filtro_data == "Ano Completo":
-            ano_atual = datetime.now().year
-            ano_selecionado = st.selectbox("Ano:", [2024, 2025, 2026, 2027], index=[2024, 2025, 2026, 2027].index(ano_atual))
-            data_inicio = datetime(ano_selecionado, 1, 1).date()
-            data_fim = datetime(ano_selecionado, 12, 31).date()
-            
-            mes_farol = "Ano" # Trigger para o Y.T.D na planilha
-            
         else:
             ano_vigente = datetime.now().year
             padrao_inicio = datetime(ano_vigente, datetime.now().month, 1).date()
@@ -618,8 +615,6 @@ if not df_view.empty:
             
             data_inicio = st.date_input("Data Inicial:", value=padrao_inicio, format="DD/MM/YYYY", key=f"di_{cli_sel}")
             data_fim = st.date_input("Data Final:", value=padrao_fim, format="DD/MM/YYYY", key=f"df_{cli_sel}")
-            
-            mes_farol = None # Período quebrado não tem meta fixa na planilha
 
         if data_inicio and data_fim:
             mask_data = (df_view['data_publicacao'].dt.date >= data_inicio) & (df_view['data_publicacao'].dt.date <= data_fim)
@@ -654,7 +649,7 @@ if not df_view.empty:
             st.rerun()
 
     # ============================================================
-    # CÁLCULO DO PERÍODO ANTERIOR (Fallback para casos sem meta)
+    # CÁLCULO DO PERÍODO ANTERIOR
     # ============================================================
     delta_dias_periodo = (data_fim - data_inicio).days + 1
     data_fim_anterior = data_inicio - timedelta(days=1)
@@ -673,8 +668,6 @@ if not df_view.empty:
         texto_base_delta = "vs. sem. ant."
     elif 28 <= delta_dias_periodo <= 31:
         texto_base_delta = "vs. mês ant."
-    elif 365 <= delta_dias_periodo <= 366:
-        texto_base_delta = "vs. ano ant."
     else:
         texto_base_delta = f"vs. {delta_dias_periodo}d ant."
 
@@ -700,21 +693,6 @@ if not df_view.empty:
     aud_total = safe_float(df_view_final['audiencia'].apply(limpar_valor_numerico).sum())
     val_total = safe_float(df_view_final.apply(lambda r: extrair_valoracao_real(r['valoracao'], r['sentimento']), axis=1).sum())
 
-    # --- INTEGRAÇÃO: BUSCANDO METAS ANTES DE RENDERIZAR O RESUMO ---
-    metas = {}
-    if cli_sel != "Todos os Clientes" and mes_farol:
-        with st.spinner("Sincronizando Resumo e Farol com a Folha de Cálculo..."):
-            metas_fetch = buscar_metas_do_cliente_sheets(cli_sel, mes_farol)
-            if metas_fetch:
-                metas = metas_fetch
-
-    # Função inteligente para cruzar nomes da dashboard com nomes da planilha
-    def encontrar_meta(nome_esperado):
-        for k, v in metas.items():
-            if nome_esperado.lower() in k.lower():
-                return v
-        return None
-
     aba_resumo, aba_farol, aba_tabela = st.tabs(["📊 Resumo", "🚦 Farol de Metas", "📋 Tabela Completa"])
 
     with aba_resumo:
@@ -722,91 +700,37 @@ if not df_view.empty:
 
         with col_cards:
             with st.container(border=True):
-                
-                # --- CARD 1: TOTAL DE MATÉRIAS ---
-                meta_mat_data = encontrar_meta("total de publicações")
-                if meta_mat_data:
-                    r_mat = meta_mat_data["realizado"]
-                    m_mat = meta_mat_data["meta"]
-                    pct_mat = (r_mat / m_mat * 100) if m_mat > 0 else 100
-                    val_mat_str = formatar_numero_br(r_mat, 0)
-                    delta_mat = f"🎯 Meta: {formatar_numero_br(m_mat, 0)} ({pct_mat:.1f}%)"
-                    dcol_mat = "off" # Deixa a fonte do delta cinzenta/discreta
-                else:
-                    val_mat_str = formatar_numero_br(total_materias, 0)
-                    delta_mat = calcular_delta(total_materias, total_materias_ant, texto_base_delta)
-                    dcol_mat = "normal"
-                    
-                st.metric("Total de Matérias", val_mat_str, delta=delta_mat, delta_color=dcol_mat)
+                st.metric(
+                    "Total de Matérias", formatar_numero_br(total_materias, 0),
+                    delta=calcular_delta(total_materias, total_materias_ant, texto_base_delta)
+                )
 
                 k1, k2 = st.columns(2)
-                
-                # --- CARD 2: AUDIÊNCIA ---
-                meta_aud_data = encontrar_meta("audiência")
-                if meta_aud_data:
-                    r_aud = meta_aud_data["realizado"]
-                    m_aud = meta_aud_data["meta"]
-                    pct_aud = (r_aud / m_aud * 100) if m_aud > 0 else 100
-                    val_aud_str = formatar_audiencia(r_aud)
-                    delta_aud = f"🎯 Meta: {formatar_audiencia(m_aud)} ({pct_aud:.1f}%)"
-                    dcol_aud = "off"
-                else:
-                    val_aud_str = formatar_audiencia(aud_total)
-                    delta_aud = calcular_delta(aud_total, aud_total_ant, texto_base_delta)
-                    dcol_aud = "normal"
-                    
-                k1.metric("Audiência Estimada", val_aud_str, delta=delta_aud, delta_color=dcol_aud)
-                
-                # --- CARD 3: VALOR EDITORIAL ---
-                meta_val_data = encontrar_meta("ad value")
-                if meta_val_data:
-                    r_val = meta_val_data["realizado"]
-                    m_val = meta_val_data["meta"]
-                    pct_val = (r_val / m_val * 100) if m_val > 0 else 100
-                    val_val_str = formatar_moeda(r_val)
-                    delta_val = f"🎯 Meta: {formatar_moeda(m_val)} ({pct_val:.1f}%)"
-                    dcol_val = "off"
-                else:
-                    val_val_str = formatar_moeda(val_total)
-                    delta_val = calcular_delta(val_total, val_total_ant, texto_base_delta)
-                    dcol_val = "normal"
-                    
-                k2.metric("Valor Editorial", val_val_str, delta=delta_val, delta_color=dcol_val)
-                
+                k1.metric(
+                    "Audiência Estimada", formatar_audiencia(aud_total),
+                    delta=calcular_delta(aud_total, aud_total_ant, texto_base_delta)
+                )
+                k2.metric(
+                    "Valor Editorial", formatar_moeda(val_total),
+                    delta=calcular_delta(val_total, val_total_ant, texto_base_delta)
+                )
                 st.markdown("---")
 
                 # ============================================================
                 # CLASSIFICAÇÃO POSICIONADA ACIMA DE DISTRIBUTION
                 # ============================================================
                 st.markdown("<span class='terminal-label'> Classificação</span>", unsafe_allow_html=True)
-                
-                meta_tier_data = encontrar_meta("top voice") or encontrar_meta("tier 1")
-
                 if cli_sel == "Ambev":
+                    qtd_idm = len(df_view_final[df_view_final['check_idm'].astype(str).str.strip() == "IDM"])
+                    qtd_sem_idm = total_materias - qtd_idm
                     c_idm1, c_idm2 = st.columns(2)
-                    if meta_tier_data:
-                        r_t = meta_tier_data["realizado"]
-                        m_t = meta_tier_data["meta"]
-                        pct_t = (r_t / m_t * 100) if m_t > 0 else 100
-                        c_idm1.metric("IDM", formatar_numero_br(r_t, 0), delta=f"🎯 Meta: {formatar_numero_br(m_t, 0)} ({pct_t:.1f}%)", delta_color="off")
-                    else:
-                        qtd_idm = len(df_view_final[df_view_final['check_idm'].astype(str).str.strip() == "IDM"])
-                        c_idm1.metric("IDM", formatar_numero_br(qtd_idm, 0))
-                        
-                    qtd_sem_idm = total_materias - len(df_view_final[df_view_final['check_idm'].astype(str).str.strip() == "IDM"])
+                    c_idm1.metric("IDM", formatar_numero_br(qtd_idm, 0))
                     c_idm2.metric("Não idm", formatar_numero_br(qtd_sem_idm, 0))
                 elif "tier" in df_view_final.columns:
-                    c_t1, c_t2 = st.columns(2)
-                    if meta_tier_data:
-                        r_t = meta_tier_data["realizado"]
-                        m_t = meta_tier_data["meta"]
-                        pct_t = (r_t / m_t * 100) if m_t > 0 else 100
-                        c_t1.metric("Tier 1", formatar_numero_br(r_t, 0), delta=f"🎯 Meta: {formatar_numero_br(m_t, 0)} ({pct_t:.1f}%)", delta_color="off")
-                    else:
-                        qtd_tier1 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 1"])
-                        c_t1.metric("Tier 1", formatar_numero_br(qtd_tier1, 0))
-                        
+                    qtd_tier1 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 1"])
                     qtd_tier2 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 2"])
+                    c_t1, c_t2 = st.columns(2)
+                    c_t1.metric("Tier 1", formatar_numero_br(qtd_tier1, 0))
                     c_t2.metric("Outros", formatar_numero_br(qtd_tier2, 0))
 
                 st.markdown("---")
@@ -824,20 +748,11 @@ if not df_view.empty:
                 canais_ordenados = dict(sorted(canais_presentes.items(), key=lambda item: item[1], reverse=True))
                 itens = list(canais_ordenados.items())
                 n_por_linha = 2
-                
                 for i in range(0, len(itens), n_por_linha):
                     linha = itens[i:i + n_por_linha]
                     linha_cols = st.columns(n_por_linha)
                     for idx, (c_nome, c_qtd) in enumerate(linha):
-                        meta_c_data = encontrar_meta(c_nome)
-                        if meta_c_data:
-                            r_c = meta_c_data["realizado"]
-                            m_c = meta_c_data["meta"]
-                            pct_c = (r_c / m_c * 100) if m_c > 0 else 100
-                            delta_c = f"🎯 Meta: {formatar_numero_br(m_c, 0)} ({pct_c:.1f}%)"
-                            linha_cols[idx].metric(c_nome, formatar_numero_br(r_c, 0), delta=delta_c, delta_color="off")
-                        else:
-                            linha_cols[idx].metric(c_nome, formatar_numero_br(c_qtd, 0))
+                        linha_cols[idx].metric(c_nome, formatar_numero_br(c_qtd, 0))
 
         with col_graficos:
             if total_materias > 0:
@@ -949,87 +864,95 @@ if not df_view.empty:
         
         if cli_sel == "Todos os Clientes":
             st.warning("⚠️ Por favor, selecione um cliente específico na barra lateral para carregar as metas individuais.")
-        elif not mes_farol:
-            st.warning("⚠️ O Farol de Metas não suporta o 'Período Personalizado'. Por favor, selecione 'Mês Fechado' ou 'Ano Completo' na barra lateral.")
-        elif not metas:
-            st.info(f"Nenhuma meta encontrada na folha para a aba '{cli_sel}' no período selecionado. Verifique se a aba existe ou se a coluna está preenchida.")
         else:
-            dados_grafico = []
-            for kpi, valores in metas.items():
-                valor_meta = valores['meta']
-                valor_realizado = valores['realizado']
+            col_seletor, _ = st.columns([1, 4])
+            meses_abrev = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez", "Ano"]
+            mes_selecionado = col_seletor.selectbox("Selecione o período da meta:", meses_abrev, index=datetime.now().month - 1)
+            
+            with st.spinner("Buscando metas na folha de cálculo..."):
+                metas = buscar_metas_do_cliente_sheets(cli_sel, mes_selecionado)
                 
-                if valor_meta == 0 and valor_realizado == 0:
-                    continue 
-                    
-                if valor_meta > 0:
-                    pct_alcancado = (valor_realizado / valor_meta) * 100
-                else:
-                    pct_alcancado = 0 if valor_realizado == 0 else 100
-                    
-                barra_azul = min(pct_alcancado, 100) 
-                barra_vermelha = max(0, 100 - barra_azul)
-                
-                kpi_lower = kpi.lower()
-                kpi_is_percent = False
-                
-                if kpi_lower == "cobertura geográfica (% atuação priorit.)" or "taxa" in kpi_lower or "score" in kpi_lower or "share of voice" in kpi_lower or "crescimento" in kpi_lower:
-                    kpi_is_percent = True
-                    
-                if "cob. geog: regional" in kpi_lower or "cob. geog: nacional" in kpi_lower or "cob. geog: internacional" in kpi_lower:
-                    kpi_is_percent = False
-
-                if kpi_is_percent:
-                    txt_m = f"{valor_meta*100:.1f}%"
-                    txt_r = f"{valor_realizado*100:.1f}%"
-                elif "ad value" in kpi_lower:
-                    txt_m = formatar_moeda(valor_meta)
-                    txt_r = formatar_moeda(valor_realizado)
-                else:
-                    txt_m = formatar_numero_br(valor_meta)
-                    txt_r = formatar_numero_br(valor_realizado)
-                    
-                dados_grafico.append({
-                    "KPI": kpi,
-                    "Alcançado (%)": barra_azul,
-                    "Faltante (%)": barra_vermelha,
-                    "Texto_Hover": f"<b>{kpi}</b><br>Meta: {txt_m}<br>Realizado: {txt_r}<br>Progresso: {pct_alcancado:.1f}%",
-                    "Rotulo_Visivel": f"{txt_r} / {txt_m}"
-                })
-                
-            if dados_grafico:
-                df_graf = pd.DataFrame(dados_grafico).iloc[::-1] 
-                
-                fig = go.Figure()
-                
-                fig.add_trace(go.Bar(
-                    y=df_graf['KPI'], x=df_graf['Alcançado (%)'], name='Alcançado',
-                    orientation='h', marker=dict(color='#6C5CE7'),
-                    hoverinfo='text', hovertext=df_graf['Texto_Hover'],
-                    text=df_graf['Rotulo_Visivel'],
-                    textposition='auto',
-                    insidetextfont=dict(color='white', family='Inter', size=13),
-                    outsidetextfont=dict(color='#2D2A4A', family='Inter', size=13)
-                ))
-                
-                fig.add_trace(go.Bar(
-                    y=df_graf['KPI'], x=df_graf['Faltante (%)'], name='Meta',
-                    orientation='h', marker=dict(color='#ff7675'),
-                    hoverinfo='text', hovertext=df_graf['Texto_Hover'],
-                    textposition='none'
-                ))
-                
-                fig.update_layout(
-                    barmode='stack',
-                    xaxis=dict(range=[0, 100], tickvals=[0, 25, 50, 75, 100], ticktext=['0%', '25%', '50%', '75%', '100%']),
-                    plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                    margin=dict(l=200, r=20, t=20, b=40),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5),
-                    height=150 + (len(df_graf) * 45) 
-                )
-                st.plotly_chart(fig, use_container_width=True)
+            if not metas:
+                st.info(f"Nenhuma meta encontrada na folha para a aba '{cli_sel}' no período de {mes_selecionado}. Verifique se a aba existe ou se a coluna está preenchida.")
             else:
-                st.info("Nenhum KPI com dados preenchidos foi encontrado para o período selecionado.")
+                dados_grafico = []
+                for kpi, valores in metas.items():
+                    valor_meta = valores['meta']
+                    valor_realizado = valores['realizado']
+                    
+                    if valor_meta == 0 and valor_realizado == 0:
+                        continue 
+                        
+                    if valor_meta > 0:
+                        pct_alcancado = (valor_realizado / valor_meta) * 100
+                    else:
+                        pct_alcancado = 0 if valor_realizado == 0 else 100
+                        
+                    barra_azul = min(pct_alcancado, 100) 
+                    barra_vermelha = max(0, 100 - barra_azul)
+                    
+                    # CORREÇÃO: Lógica refinada para identificar o que é realmente percentagem
+                    kpi_lower = kpi.lower()
+                    kpi_is_percent = False
+                    
+                    if kpi_lower == "cobertura geográfica (% atuação priorit.)" or "taxa" in kpi_lower or "score" in kpi_lower or "share of voice" in kpi_lower or "crescimento" in kpi_lower:
+                        kpi_is_percent = True
+                        
+                    # Se for "Cob. Geog: Regional...", forçamos a NÃO ser percentagem, mesmo tendo "%" no nome
+                    if "cob. geog: regional" in kpi_lower or "cob. geog: nacional" in kpi_lower or "cob. geog: internacional" in kpi_lower:
+                        kpi_is_percent = False
+
+                    if kpi_is_percent:
+                        txt_m = f"{valor_meta*100:.1f}%"
+                        txt_r = f"{valor_realizado*100:.1f}%"
+                    elif "ad value" in kpi_lower:
+                        txt_m = formatar_moeda(valor_meta)
+                        txt_r = formatar_moeda(valor_realizado)
+                    else:
+                        txt_m = formatar_numero_br(valor_meta)
+                        txt_r = formatar_numero_br(valor_realizado)
+                        
+                    dados_grafico.append({
+                        "KPI": kpi,
+                        "Alcançado (%)": barra_azul,
+                        "Faltante (%)": barra_vermelha,
+                        "Texto_Hover": f"<b>{kpi}</b><br>Meta: {txt_m}<br>Realizado: {txt_r}<br>Progresso: {pct_alcancado:.1f}%",
+                        "Rotulo_Visivel": f"{txt_r} / {txt_m}"
+                    })
+                    
+                if dados_grafico:
+                    df_graf = pd.DataFrame(dados_grafico).iloc[::-1] 
+                    
+                    fig = go.Figure()
+                    
+                    fig.add_trace(go.Bar(
+                        y=df_graf['KPI'], x=df_graf['Alcançado (%)'], name='Alcançado',
+                        orientation='h', marker=dict(color='#6C5CE7'),
+                        hoverinfo='text', hovertext=df_graf['Texto_Hover'],
+                        text=df_graf['Rotulo_Visivel'],
+                        textposition='auto',
+                        insidetextfont=dict(color='white', family='Inter', size=13),
+                        outsidetextfont=dict(color='#2D2A4A', family='Inter', size=13)
+                    ))
+                    
+                    fig.add_trace(go.Bar(
+                        y=df_graf['KPI'], x=df_graf['Faltante (%)'], name='Meta',
+                        orientation='h', marker=dict(color='#ff7675'),
+                        hoverinfo='text', hovertext=df_graf['Texto_Hover'],
+                        textposition='none'
+                    ))
+                    
+                    fig.update_layout(
+                        barmode='stack',
+                        xaxis=dict(range=[0, 100], tickvals=[0, 25, 50, 75, 100], ticktext=['0%', '25%', '50%', '75%', '100%']),
+                        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                        margin=dict(l=200, r=20, t=20, b=40),
+                        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5),
+                        height=150 + (len(df_graf) * 45) 
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("Nenhum KPI com dados preenchidos foi encontrado para o período selecionado.")
 
     with aba_tabela:
         df_preview = df_view_final.copy()
