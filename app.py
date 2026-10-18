@@ -580,9 +580,9 @@ if not df_view.empty:
     # ============================================================
     with st.sidebar:
         st.markdown("<span class='terminal-label'>Filtros</span>", unsafe_allow_html=True)
-        tipo_filtro_data = st.radio("Selecione o período por:", ["Mês Atual", "Ano Completo", "Período Personalizado"], horizontal=True)
+        tipo_filtro_data = st.radio("Selecione o período por:", ["Mês Fechado", "Ano Completo", "Período Personalizado"], horizontal=True)
         
-        if tipo_filtro_data == "Mês Atual":
+        if tipo_filtro_data == "Mês Fechado":
             col_m, col_a = st.columns(2)
             meses_opcoes = {
                 "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4,
@@ -794,22 +794,12 @@ if not df_view.empty:
                 # ============================================================
                 st.markdown("<span class='terminal-label'> Classificação</span>", unsafe_allow_html=True)
                 
-                meta_tier_data = encontrar_meta(["top voice", "tier 1", "idm"])
-
                 if cli_sel == "Ambev":
                     c_idm1, c_idm2 = st.columns(2)
                     qtd_idm = len(df_view_final[df_view_final['check_idm'].astype(str).str.strip() == "IDM"])
                     qtd_sem_idm = total_materias - qtd_idm
                     
-                    if meta_tier_data:
-                        m_t = meta_tier_data["meta"]
-                        r_t = meta_tier_data["realizado"]
-                        pct_t = (r_t / m_t * 100) if m_t > 0 else 100
-                        delta_t = f"🎯 Meta: {formatar_numero_br(m_t, 0)} ({pct_t:.1f}%)"
-                        c_idm1.metric("IDM", formatar_numero_br(qtd_idm, 0), delta=delta_t, delta_color="off")
-                    else:
-                        c_idm1.metric("IDM", formatar_numero_br(qtd_idm, 0))
-                        
+                    c_idm1.metric("IDM", formatar_numero_br(qtd_idm, 0))
                     c_idm2.metric("Não idm", formatar_numero_br(qtd_sem_idm, 0))
                     
                 elif "tier" in df_view_final.columns:
@@ -817,15 +807,7 @@ if not df_view.empty:
                     qtd_tier1 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 1"])
                     qtd_tier2 = len(df_view_final[df_view_final['tier'].astype(str).str.strip() == "Tier 2"])
                     
-                    if meta_tier_data:
-                        m_t = meta_tier_data["meta"]
-                        r_t = meta_tier_data["realizado"]
-                        pct_t = (r_t / m_t * 100) if m_t > 0 else 100
-                        delta_t = f"🎯 Meta: {formatar_numero_br(m_t, 0)} ({pct_t:.1f}%)"
-                        c_t1.metric("Tier 1", formatar_numero_br(qtd_tier1, 0), delta=delta_t, delta_color="off")
-                    else:
-                        c_t1.metric("Tier 1", formatar_numero_br(qtd_tier1, 0))
-                        
+                    c_t1.metric("Tier 1", formatar_numero_br(qtd_tier1, 0))
                     c_t2.metric("Outros", formatar_numero_br(qtd_tier2, 0))
 
                 st.markdown("---")
@@ -969,7 +951,7 @@ if not df_view.empty:
         if cli_sel == "Todos os Clientes":
             st.warning("⚠️ Por favor, selecione um cliente específico na barra lateral para carregar as metas individuais.")
         elif not mes_farol:
-            st.warning("⚠️ O Farol de Metas não suporta o 'Período Personalizado'. Por favor, selecione 'Mês Atual' ou 'Ano Completo' na barra lateral.")
+            st.warning("⚠️ O Farol de Metas não suporta o 'Período Personalizado'. Por favor, selecione 'Mês Fechado' ou 'Ano Completo' na barra lateral.")
         elif not metas:
             st.info(f"Nenhuma meta encontrada na folha para a aba '{cli_sel}' no período selecionado. Verifique se a aba existe ou se a coluna está preenchida.")
         else:
