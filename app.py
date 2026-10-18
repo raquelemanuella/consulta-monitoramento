@@ -939,7 +939,7 @@ with aba_farol:
                 else:
                     st.info("Nenhum KPI com dados preenchidos foi encontrado para o período selecionado.")
 
-    with aba_tabela:
+with aba_tabela:
         df_preview = df_view_final.copy()
         df_preview['data_formatada'] = df_preview['data_publicacao'].dt.tz_localize(None)
         df_preview['audiencia'] = df_preview['audiencia'].apply(limpar_valor_numerico)
