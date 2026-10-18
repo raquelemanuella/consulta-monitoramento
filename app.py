@@ -905,7 +905,8 @@ if not df_view.empty:
                         "KPI": kpi,
                         "Alcançado (%)": barra_azul,
                         "Faltante (%)": barra_vermelha,
-                        "Texto": f"<b>{kpi}</b><br>Meta: {txt_m}<br>Realizado: {txt_r}<br>Progresso: {pct_alcancado:.1f}%"
+                        "Texto_Hover": f"<b>{kpi}</b><br>Meta: {txt_m}<br>Realizado: {txt_r}<br>Progresso: {pct_alcancado:.1f}%",
+                        "Rotulo_Visivel": f"{txt_r} / {txt_m}"
                     })
                     
                 if dados_grafico:
@@ -916,13 +917,18 @@ if not df_view.empty:
                     fig.add_trace(go.Bar(
                         y=df_graf['KPI'], x=df_graf['Alcançado (%)'], name='Alcançado',
                         orientation='h', marker=dict(color='#6C5CE7'),
-                        hoverinfo='text', text=df_graf['Texto'], textposition='none'
+                        hoverinfo='text', hovertext=df_graf['Texto_Hover'],
+                        text=df_graf['Rotulo_Visivel'],
+                        textposition='auto',
+                        insidetextfont=dict(color='white', family='Inter', size=13),
+                        outsidetextfont=dict(color='#2D2A4A', family='Inter', size=13)
                     ))
                     
                     fig.add_trace(go.Bar(
                         y=df_graf['KPI'], x=df_graf['Faltante (%)'], name='Meta',
                         orientation='h', marker=dict(color='#ff7675'),
-                        hoverinfo='text', text=df_graf['Texto'], textposition='none'
+                        hoverinfo='text', hovertext=df_graf['Texto_Hover'],
+                        textposition='none'
                     ))
                     
                     fig.update_layout(
