@@ -473,8 +473,10 @@ def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
             idx_col_kpi = 8
             idx_linha_meses = 1
             
-        # 2. Encontrar a coluna do Mês (Tratando Textos Puros E Datas Nativas do Sheets)
-        mes_procura = mes_abrev.lower()[:3]
+        # 2. Encontrar a coluna do Mês (ou Ano/Y.T.D)
+        # Se escolher "Ano", procura por "y.t.d". Caso contrário, procura os 3 primeiros caracteres do mês
+        mes_procura = "y.t.d" if mes_abrev == "Ano" else mes_abrev.lower()[:3]
+        
         meses_num = {"jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6, 
                      "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12}
         mes_procura_num = meses_num.get(mes_procura)
@@ -486,16 +488,14 @@ def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
                 
                 encontrou = False
                 
-                # Verificação A: É um texto normal que contém o mês (ex: "out")?
+                # Verificação A: É um texto normal que contém o mês ou "y.t.d"?
                 if mes_procura in val_str and len(val_str) < 15:
                     encontrou = True
-                else:
-                    # Verificação B: É uma Data Automática do Google Sheets?
+                elif mes_procura_num: 
+                    # Verificação B: É uma Data Automática do Google Sheets? (Ignorado para a busca de Ano)
                     try:
                         val_num = float(valor_cru)
-                        # Datas recentes no Sheets são guardadas como dias acima de 40.000
                         if 40000 < val_num < 50000:
-                            # 1899-12-30 é a "data zero" do Google Sheets
                             dt = datetime(1899, 12, 30) + timedelta(days=int(val_num))
                             if dt.month == mes_procura_num:
                                 encontrou = True
@@ -512,21 +512,28 @@ def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
         if idx_col_mes == -1:
             return None 
             
-        # 3. Varrer a coluna para baixo e extrair as metas matemáticas
+        # 3. Varrer a coluna para baixo e extrair Meta e Realizado
         metas_extraidas = {}
         for i in range(idx_linha_meses, len(df_sheets)):
             kpi_nome = str(df_sheets.iloc[i, idx_col_kpi]).strip()
             
             if kpi_nome and i + 1 < len(df_sheets):
                 if "meta" in str(df_sheets.iloc[i + 1, idx_col_kpi]).strip().lower():
+                    # O Realizado fica na linha atual do KPI, e a Meta na linha de baixo!
+                    valor_realizado_bruto = df_sheets.iloc[i, idx_col_mes]
                     valor_meta_bruto = df_sheets.iloc[i + 1, idx_col_mes]
-                    metas_extraidas[kpi_nome] = safe_float(valor_meta_bruto)
+                    
+                    metas_extraidas[kpi_nome] = {
+                        "meta": limpar_valor_numerico(valor_meta_bruto),
+                        "realizado": limpar_valor_numerico(valor_realizado_bruto)
+                    }
                     
         return metas_extraidas
 
     except Exception as e:
         st.error(f"⚠️ Erro ao conectar com o Google Sheets: {e}")
         return None
+        
 CLIENTES = [
     "2GB Entretenimento", "99 City Launches", "99 Food", "99 Metrô", "Ambev", "ACEC", "Camarote LEM", "CCBB Salvador", "Clínica Sim",
     "Crema Gelato", "Faculdade Baiana de Direito e Gestão", "Feed Experience Hub",
@@ -852,59 +859,44 @@ if not df_view.empty:
 
                 st.plotly_chart(fig_evolucao, use_container_width=True)
 
-    with aba_farol:
+   with aba_farol:
         st.markdown("<span class='terminal-label'>Tracking</span><h4>Farol de Metas vs. Realizado</h4>", unsafe_allow_html=True)
         
         if cli_sel == "Todos os Clientes":
             st.warning("⚠️ Por favor, selecione um cliente específico na barra lateral para carregar as metas individuais.")
         else:
             col_seletor, _ = st.columns([1, 4])
-            meses_abrev = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
-            mes_selecionado = col_seletor.selectbox("Selecione o mês da meta:", meses_abrev, index=datetime.now().month - 1)
+            # ADICIONADO O "Ano" AQUI NA LISTA
+            meses_abrev = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez", "Ano"]
+            mes_selecionado = col_seletor.selectbox("Selecione o período da meta:", meses_abrev, index=datetime.now().month - 1)
             
             with st.spinner("Buscando metas na folha de cálculo..."):
                 metas = buscar_metas_do_cliente_sheets(cli_sel, mes_selecionado)
                 
             if not metas:
-                st.info(f"Nenhuma meta encontrada na folha para a aba '{cli_sel}' no mês de {mes_selecionado}. Verifique se a aba existe ou se o mês está preenchido.")
+                st.info(f"Nenhuma meta encontrada na folha para a aba '{cli_sel}' no período de {mes_selecionado}. Verifique se a aba existe ou se a coluna está preenchida.")
             else:
-                realizados = {}
-                realizados["Total de Publicações"] = len(df_view_final)
-                realizados["Audiência Estimada"] = aud_total
-                realizados["Ad Value"] = val_total
-                
-                df_canal = df_view_final['canal'].apply(padronizar_canal).str.upper()
-                realizados["TV"] = len(df_view_final[df_canal == 'TV'])
-                realizados["Rádio"] = len(df_view_final[df_canal == 'RÁDIO'])
-                
-                sentimentos = df_view_final['sentimento'].astype(str).str.lower().str.strip()
-                qtd_positivas = len(sentimentos[sentimentos.isin(['positivo', 'positiva'])])
-                qtd_negativas = len(sentimentos[sentimentos.isin(['negativo', 'negativa'])])
-                total_validos = len(sentimentos[sentimentos != ""])
-                if total_validos > 0:
-                    realizados["Net Sentiment Score %"] = (qtd_positivas - qtd_negativas) / total_validos
-                else:
-                    realizados["Net Sentiment Score %"] = 0.0
-
                 dados_grafico = []
-                for kpi, valor_meta in metas.items():
-                    if pd.isna(valor_meta) or valor_meta == "" or kpi not in realizados:
-                        continue
-                        
-                    valor_realizado = realizados[kpi]
+                for kpi, valores in metas.items():
+                    valor_meta = valores['meta']
+                    valor_realizado = valores['realizado']
                     
+                    # Ignora se não houver meta nem realizado
+                    if valor_meta == 0 and valor_realizado == 0:
+                        continue 
+                        
                     if valor_meta > 0:
                         pct_alcancado = (valor_realizado / valor_meta) * 100
                     else:
                         pct_alcancado = 0 if valor_realizado == 0 else 100
                         
                     barra_azul = min(pct_alcancado, 100) 
-                    barra_vermelha = 100 - barra_azul
+                    barra_vermelha = max(0, 100 - barra_azul)
                     
                     if "%" in kpi:
                         txt_m = f"{valor_meta*100:.1f}%"
                         txt_r = f"{valor_realizado*100:.1f}%"
-                    elif kpi == "Ad Value":
+                    elif "Ad Value" in kpi:
                         txt_m = formatar_moeda(valor_meta)
                         txt_r = formatar_moeda(valor_realizado)
                     else:
@@ -945,7 +937,7 @@ if not df_view.empty:
                     )
                     st.plotly_chart(fig, use_container_width=True)
                 else:
-                    st.info("Nenhum KPI com meta definida foi encontrado para o mês selecionado.")
+                    st.info("Nenhum KPI com dados preenchidos foi encontrado para o período selecionado.")
 
     with aba_tabela:
         df_preview = df_view_final.copy()
