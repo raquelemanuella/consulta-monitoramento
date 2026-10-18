@@ -865,8 +865,34 @@ if not df_view.empty:
                     st.markdown("<span class='terminal-label'>Geomapping</span><h4>Publicações por Estado ⚠️ </h4>", unsafe_allow_html=True)
                     df_barras = df_view_final['estado'].value_counts().reset_index()
                     df_barras.columns = ['Estado', 'Quantidade']
+
+                    # --- MAPEAMENTO DOS ESTADOS PRIORITÁRIOS POR CLIENTE (CONFORME OS PRINTS) ---
+                    # Mapeia estados prioritários exatos para cada cliente
+                    estados_prioritarios_dict = {
+                        "Grupo Raymundo da Fonte": ["PE", "BA", "CE", "PA"],
+                        "XP Investimentos": ["PE", "BA", "CE", "PB"],
+                        "99 Food": ["NENO", "CENTRO-OESTE", "SUDESTE", "SP", "RJ", "MG"], # ou regiões do print
+                        "Ambev": ["PE", "CE", "MG", "BA", "PA", "AM"],
+                        "Faculdade Baiana de Direito e Gestão": ["BA"],
+                        "Clínica Sim": ["PE", "CE", "BA"],
+                        "Villa Global Education": ["BA", "NE"],
+                        "ACEC": ["BA"],
+                        "Feed Experience Hub": ["BA"]
+                    }
+                    
+                    # Pega a lista de prioritários do cliente selecionado (ou vazio se for Todos)
+                    prioritarios_cliente = estados_prioritarios_dict.get(cli_sel, [])
+                    
+                    # Define a cor para cada barra (destaque em roxo #6C5CE7 para prioritários, azulado #A29BFE para os demais)
+                    cores_barras = []
+                    for est in df_barras['Estado']:
+                        if est in prioritarios_cliente or any(p in est for p in prioritarios_cliente):
+                            cores_barras.append('#6C5CE7') # Cor de Destaque (Prioritário)
+                        else:
+                            cores_barras.append('#C4BFF0') # Cor Secundária / Demais estados
+
                     fig_barras = px.bar(df_barras, x='Estado', y='Quantidade', text_auto=True)
-                    fig_barras.update_traces(marker_color='#6C5CE7')
+                    fig_barras.update_traces(marker_color=cores_barras)
                     fig_barras.update_layout(xaxis_title="", yaxis_title="Publicações", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", margin=dict(t=10, b=10, l=0, r=0), height=280)
                     st.plotly_chart(fig_barras, use_container_width=True)
 
