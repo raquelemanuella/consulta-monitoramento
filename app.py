@@ -458,7 +458,7 @@ def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
         idx_col_mes = -1
         idx_col_kpi = -1
         
-        # 1. Encontrar a coluna de KPI's exata (ignorando a armadilha da coluna "Indicador")
+        # 1. Encontrar a coluna de KPI's
         for idx in range(min(5, len(df_sheets))):
             linha_temp = [str(x).strip().lower() for x in df_sheets.iloc[idx].tolist()]
             for col_idx, valor_celula in enumerate(linha_temp):
@@ -469,40 +469,55 @@ def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
             if idx_col_kpi != -1:
                 break
                 
-        # Fallback de segurança (se alguém apagar o cabeçalho KPI, ele vai para a coluna I)
         if idx_col_kpi == -1:
             idx_col_kpi = 8
             idx_linha_meses = 1
             
-        # 2. Encontrar a coluna do Mês escolhido
+        # 2. Encontrar a coluna do Mês (Tratando Textos Puros E Datas Nativas do Sheets)
         mes_procura = mes_abrev.lower()[:3]
+        meses_num = {"jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6, 
+                     "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12}
+        mes_procura_num = meses_num.get(mes_procura)
         
         for idx in range(max(0, idx_linha_meses - 1), min(5, len(df_sheets))):
-            linha_temp = [str(x).strip().lower() for x in df_sheets.iloc[idx].tolist()]
-            
-            # O SEGREDO: O robô agora só procura o mês nas colunas à DIREITA dos KPIs
-            for col_idx in range(idx_col_kpi + 1, len(linha_temp)):
-                valor_celula = linha_temp[col_idx]
+            for col_idx in range(idx_col_kpi + 1, len(df_sheets.columns)):
+                valor_cru = df_sheets.iloc[idx, col_idx]
+                val_str = str(valor_cru).strip().lower()
                 
-                # Se o texto tiver o mês (ex: "out" dentro de "out. / 26")
-                if mes_procura in valor_celula and len(valor_celula) < 15:
+                encontrou = False
+                
+                # Verificação A: É um texto normal que contém o mês (ex: "out")?
+                if mes_procura in val_str and len(val_str) < 15:
+                    encontrou = True
+                else:
+                    # Verificação B: É uma Data Automática do Google Sheets?
+                    try:
+                        val_num = float(valor_cru)
+                        # Datas recentes no Sheets são guardadas como dias acima de 40.000
+                        if 40000 < val_num < 50000:
+                            # 1899-12-30 é a "data zero" do Google Sheets
+                            dt = datetime(1899, 12, 30) + timedelta(days=int(val_num))
+                            if dt.month == mes_procura_num:
+                                encontrou = True
+                    except:
+                        pass
+                        
+                if encontrou:
                     idx_col_mes = col_idx
-                    idx_linha_meses = idx # Regista a linha exata do mês
+                    idx_linha_meses = idx
                     break
             if idx_col_mes != -1:
                 break
                 
-        # Se não encontrou o mês, para aqui
         if idx_col_mes == -1:
             return None 
             
-        # 3. Varrer para baixo e extrair as metas
+        # 3. Varrer a coluna para baixo e extrair as metas matemáticas
         metas_extraidas = {}
         for i in range(idx_linha_meses, len(df_sheets)):
             kpi_nome = str(df_sheets.iloc[i, idx_col_kpi]).strip()
             
             if kpi_nome and i + 1 < len(df_sheets):
-                # Olha diretamente para a célula abaixo à procura da palavra 'Meta'
                 if "meta" in str(df_sheets.iloc[i + 1, idx_col_kpi]).strip().lower():
                     valor_meta_bruto = df_sheets.iloc[i + 1, idx_col_mes]
                     metas_extraidas[kpi_nome] = safe_float(valor_meta_bruto)
@@ -512,7 +527,6 @@ def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
     except Exception as e:
         st.error(f"⚠️ Erro ao conectar com o Google Sheets: {e}")
         return None
-
 CLIENTES = [
     "2GB Entretenimento", "99 City Launches", "99 Food", "99 Metrô", "Ambev", "ACEC", "Camarote LEM", "CCBB Salvador", "Clínica Sim",
     "Crema Gelato", "Faculdade Baiana de Direito e Gestão", "Feed Experience Hub",
