@@ -3,7 +3,6 @@ import pandas as pd
 from supabase import create_client, Client
 import io
 import re
-import requests
 from datetime import datetime, timedelta
 import calendar
 import plotly.express as px
@@ -426,10 +425,16 @@ def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
         credentials = Credentials.from_service_account_info(credenciais_dict, scopes=scopes)
         gc = gspread.authorize(credentials)
         
-        # ATENÇÃO: Confirme se este é exatamente o nome do arquivo no seu Google Drive
-        planilha = gc.open("FAROL DE METAS — Metas & Realizados | 2026 > LK") 
+        # O robô tenta abrir com um nome, se falhar tenta com o outro
+        try:
+            planilha = gc.open("FAROL DE METAS — Metas & Realizados | 2026 > LK") 
+        except gspread.exceptions.SpreadsheetNotFound:
+            try:
+                planilha = gc.open("Consulta de Dados - Monitoramento")
+            except gspread.exceptions.SpreadsheetNotFound:
+                st.error("⚠️ Planilha Google não encontrada com nenhum dos nomes previstos.")
+                return None
         
-        # Mapa "De-Para" (Nome no filtro do Streamlit -> Sigla da Aba da Planilha)
         mapa_abas = {
             "Faculdade Baiana de Direito e Gestão": "FBD",
             "Ambev": "AMBEV",
@@ -444,30 +449,61 @@ def buscar_metas_do_cliente_sheets(cliente_selecionado, mes_abrev):
         
         nome_aba = mapa_abas.get(cliente_selecionado)
         if not nome_aba:
-            return None # Cliente sem aba de metas ainda
+            return None 
             
         aba = planilha.worksheet(nome_aba)
-        
-        # value_render_option='UNFORMATTED_VALUE' lê os números puros para podermos calcular
         dados = aba.get_all_values(value_render_option='UNFORMATTED_VALUE')
         df_sheets = pd.DataFrame(dados)
         
-        # A Linha 3 do Excel (onde estão Jan, Fev, Mar) é o índice 2 no Python
-        linha_meses = df_sheets.iloc[2].tolist() 
-        if mes_abrev not in linha_meses:
-            return None
-        idx_mes = linha_meses.index(mes_abrev)
+        # --- MOTOR DE BUSCA À PROVA DE BALA ---
+        idx_linha_meses = -1
+        idx_col_mes = -1
+        idx_col_kpi = -1
         
-        # Varredura: Achar os KPIs (Coluna I = índice 8) e "roubar" a respectiva Meta
-        metas_extraidas = {}
-        for i in range(len(df_sheets)):
-            kpi_nome = str(df_sheets.iloc[i, 8]).strip()
+        mes_procura = mes_abrev.lower()[:3] # Ex: "Set" vira "set"
+        
+        # Procura o mês nas primeiras 5 linhas para garantir
+        for idx in range(min(5, len(df_sheets))):
+            linha_temp = [str(x).strip().lower() for x in df_sheets.iloc[idx].tolist()]
             
-            # Se achou um texto de KPI válido...
-            if kpi_nome and kpi_nome != "KPI's" and i + 1 < len(df_sheets):
-                # Se a linha de baixo estiver escrita "Meta"...
-                if str(df_sheets.iloc[i + 1, 8]).strip() == "Meta":
-                    valor_meta_bruto = df_sheets.iloc[i + 1, idx_mes]
+            for col_idx, valor_celula in enumerate(linha_temp):
+                # Se encontrou o mês e a palavra é curta (ex: "set. / 26")
+                if mes_procura in valor_celula and idx_col_mes == -1 and len(valor_celula) < 15:
+                    idx_linha_meses = idx
+                    idx_col_mes = col_idx
+                
+                # Se encontrou a palavra KPI ou Indicador
+                if ("kpi" in valor_celula or "indicador" in valor_celula) and idx_col_kpi == -1:
+                    idx_col_kpi = col_idx
+                    
+        # Se não achou "KPI", procura pela palavra "Total de Publicações" para encontrar a coluna
+        if idx_col_kpi == -1:
+            for idx in range(min(10, len(df_sheets))):
+                linha_temp = [str(x).strip().lower() for x in df_sheets.iloc[idx].tolist()]
+                for col_idx, valor_celula in enumerate(linha_temp):
+                    if "total de publicações" in valor_celula:
+                        idx_col_kpi = col_idx
+                        break
+                if idx_col_kpi != -1:
+                    break
+                    
+        # Último recurso: Coluna I (índice 8) ou J (índice 9) dependendo do formato visual comum
+        if idx_col_kpi == -1:
+            idx_col_kpi = 8
+            
+        # Se mesmo assim não encontrou em que coluna o mês está, aborta
+        if idx_linha_meses == -1 or idx_col_mes == -1:
+            return None
+            
+        # Varrer a coluna descobrindo as metas reais a partir da linha do mês
+        metas_extraidas = {}
+        for i in range(idx_linha_meses, len(df_sheets)):
+            kpi_nome = str(df_sheets.iloc[i, idx_col_kpi]).strip()
+            
+            if kpi_nome and i + 1 < len(df_sheets):
+                # Olha para a linha imediatamente abaixo à procura da palavra "Meta"
+                if "meta" in str(df_sheets.iloc[i + 1, idx_col_kpi]).strip().lower():
+                    valor_meta_bruto = df_sheets.iloc[i + 1, idx_col_mes]
                     metas_extraidas[kpi_nome] = safe_float(valor_meta_bruto)
                     
         return metas_extraidas
@@ -811,13 +847,12 @@ if not df_view.empty:
             meses_abrev = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
             mes_selecionado = col_seletor.selectbox("Selecione o mês da meta:", meses_abrev, index=datetime.now().month - 1)
             
-            with st.spinner("Buscando metas na planilha..."):
+            with st.spinner("Buscando metas na folha de cálculo..."):
                 metas = buscar_metas_do_cliente_sheets(cli_sel, mes_selecionado)
                 
             if not metas:
-                st.info(f"Nenhuma meta cadastrada ou aba '{cli_sel}' não encontrada na planilha para o mês de {mes_selecionado}.")
+                st.info(f"Nenhuma meta encontrada na folha para a aba '{cli_sel}' no mês de {mes_selecionado}. Verifique se a aba existe ou se o mês está preenchido.")
             else:
-                # 1. Calculamos o que já temos no Supabase (ignorando o que não temos ainda)
                 realizados = {}
                 realizados["Total de Publicações"] = len(df_view_final)
                 realizados["Audiência Estimada"] = aud_total
@@ -836,7 +871,6 @@ if not df_view.empty:
                 else:
                     realizados["Net Sentiment Score %"] = 0.0
 
-                # 2. Preparamos os dados para o gráfico de 100%
                 dados_grafico = []
                 for kpi, valor_meta in metas.items():
                     if pd.isna(valor_meta) or valor_meta == "" or kpi not in realizados:
@@ -849,10 +883,9 @@ if not df_view.empty:
                     else:
                         pct_alcancado = 0 if valor_realizado == 0 else 100
                         
-                    barra_azul = min(pct_alcancado, 100) # Trava em 100% para não desfigurar o gráfico
+                    barra_azul = min(pct_alcancado, 100) 
                     barra_vermelha = 100 - barra_azul
                     
-                    # Textos customizados para o Hover do mouse
                     if "%" in kpi:
                         txt_m = f"{valor_meta*100:.1f}%"
                         txt_r = f"{valor_realizado*100:.1f}%"
@@ -870,23 +903,20 @@ if not df_view.empty:
                         "Texto": f"<b>{kpi}</b><br>Meta: {txt_m}<br>Realizado: {txt_r}<br>Progresso: {pct_alcancado:.1f}%"
                     })
                     
-                # 3. Desenhamos o gráfico
                 if dados_grafico:
-                    df_graf = pd.DataFrame(dados_grafico).iloc[::-1] # Inverte para manter a ordem da planilha
+                    df_graf = pd.DataFrame(dados_grafico).iloc[::-1] 
                     
                     fig = go.Figure()
                     
-                    # Barra do Alcançado
                     fig.add_trace(go.Bar(
                         y=df_graf['KPI'], x=df_graf['Alcançado (%)'], name='Alcançado',
                         orientation='h', marker=dict(color='#6C5CE7'),
                         hoverinfo='text', text=df_graf['Texto'], textposition='none'
                     ))
                     
-                    # Barra da Meta (Faltante)
                     fig.add_trace(go.Bar(
                         y=df_graf['KPI'], x=df_graf['Faltante (%)'], name='Meta',
-                        orientation='h', marker=dict(color='#ff7675'), # Vermelho similar ao print
+                        orientation='h', marker=dict(color='#ff7675'),
                         hoverinfo='text', text=df_graf['Texto'], textposition='none'
                     ))
                     
@@ -896,11 +926,11 @@ if not df_view.empty:
                         plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                         margin=dict(l=200, r=20, t=20, b=40),
                         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5),
-                        height=150 + (len(df_graf) * 45) # Altura automática
+                        height=150 + (len(df_graf) * 45) 
                     )
                     st.plotly_chart(fig, use_container_width=True)
                 else:
-                    st.info("Nenhum KPI do painel com meta lançada no mês selecionado.")
+                    st.info("Nenhum KPI com meta definida foi encontrado para o mês selecionado.")
 
     with aba_tabela:
         df_preview = df_view_final.copy()
@@ -970,7 +1000,7 @@ else:
             st.session_state["authenticated"] = False
             st.rerun()
     st.markdown("<h2 style='margin-top: 8px;'>Consulta de Monitoramento - Agência LK</h2>", unsafe_allow_html=True)
-    st.info("Nenhum registro encontrado no banco de dados.")
+    st.info("Nenhum registo encontrado no banco de dados.")
 
 st.markdown("""
     <div class="custom-footer">
