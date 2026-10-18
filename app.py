@@ -891,10 +891,21 @@ if not df_view.empty:
                     barra_azul = min(pct_alcancado, 100) 
                     barra_vermelha = max(0, 100 - barra_azul)
                     
-                    if "%" in kpi:
+                    # CORREÇÃO: Lógica refinada para identificar o que é realmente percentagem
+                    kpi_lower = kpi.lower()
+                    kpi_is_percent = False
+                    
+                    if kpi_lower == "cobertura geográfica (% atuação priorit.)" or "taxa" in kpi_lower or "score" in kpi_lower or "share of voice" in kpi_lower or "crescimento" in kpi_lower:
+                        kpi_is_percent = True
+                        
+                    # Se for "Cob. Geog: Regional...", forçamos a NÃO ser percentagem, mesmo tendo "%" no nome
+                    if "cob. geog: regional" in kpi_lower or "cob. geog: nacional" in kpi_lower or "cob. geog: internacional" in kpi_lower:
+                        kpi_is_percent = False
+
+                    if kpi_is_percent:
                         txt_m = f"{valor_meta*100:.1f}%"
                         txt_r = f"{valor_realizado*100:.1f}%"
-                    elif "Ad Value" in kpi:
+                    elif "ad value" in kpi_lower:
                         txt_m = formatar_moeda(valor_meta)
                         txt_r = formatar_moeda(valor_realizado)
                     else:
